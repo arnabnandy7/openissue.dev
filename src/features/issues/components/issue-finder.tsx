@@ -93,7 +93,6 @@ export function IssueFinder() {
                     <GitPullRequest className="h-3.5 w-3.5" />
                     OSS Issue Finder
                   </Badge>
-                  <Badge variant="outline">No database</Badge>
                   <Badge variant="outline">GitHub Search API</Badge>
                 </div>
                 <ThemeToggle />
