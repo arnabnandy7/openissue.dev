@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { GitPullRequest, Search } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -86,13 +87,16 @@ export function IssueFinder() {
         <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
           <div className="flex min-w-0 flex-col justify-between gap-8">
             <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="gap-1.5">
-                  <GitPullRequest className="h-3.5 w-3.5" />
-                  OSS Issue Finder
-                </Badge>
-                <Badge variant="outline">No database</Badge>
-                <Badge variant="outline">GitHub Search API</Badge>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="gap-1.5">
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                    OSS Issue Finder
+                  </Badge>
+                  <Badge variant="outline">No database</Badge>
+                  <Badge variant="outline">GitHub Search API</Badge>
+                </div>
+                <ThemeToggle />
               </div>
               <div className="max-w-3xl space-y-4">
                 <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
