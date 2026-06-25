@@ -25,9 +25,19 @@ export function IssueCard({ issue }: { issue: Issue }) {
             {issue.repo}
           </a>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={issue.qualityScore >= 70 ? "default" : "secondary"}>
-              {issue.qualityScore} quality
-            </Badge>
+            {issue.qualityScore >= 70 ? (
+              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
+                {issue.qualityScore} quality
+              </Badge>
+            ) : issue.qualityScore >= 40 ? (
+              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">
+                {issue.qualityScore} quality
+              </Badge>
+            ) : (
+              <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20">
+                {issue.qualityScore} quality
+              </Badge>
+            )}
             {issue.helpStatus === "open" && (
               <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
                 Needs Help
