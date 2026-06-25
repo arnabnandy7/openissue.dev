@@ -38,6 +38,7 @@ export function IssueFinder() {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(false);
 
   const selectedLabel = useMemo(
     () => LABEL_OPTIONS.find((item) => item.value === label) ?? LABEL_OPTIONS[0],
@@ -53,6 +54,7 @@ export function IssueFinder() {
     }
 
     setIsLoading(true);
+    setCooldown(true);
     setError(null);
 
     const params = new URLSearchParams({
@@ -78,6 +80,9 @@ export function IssueFinder() {
       );
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        setCooldown(false);
+      }, 3000);
     }
   }
 
@@ -149,9 +154,9 @@ export function IssueFinder() {
                 </SelectContent>
               </Select>
 
-              <Button type="submit" className="h-11 gap-2" disabled={isLoading}>
+              <Button type="submit" className="h-11 gap-2" disabled={isLoading || cooldown}>
                 <Search className="h-4 w-4" />
-                Search
+                {cooldown && !isLoading ? "Cooldown..." : "Search"}
               </Button>
             </form>
           </div>
