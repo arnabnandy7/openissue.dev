@@ -24,9 +24,26 @@ export function IssueCard({ issue }: { issue: Issue }) {
           >
             {issue.repo}
           </a>
-          <Badge variant={issue.qualityScore >= 70 ? "default" : "secondary"}>
-            {issue.qualityScore} quality
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={issue.qualityScore >= 70 ? "default" : "secondary"}>
+              {issue.qualityScore} quality
+            </Badge>
+            {issue.helpStatus === "open" && (
+              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
+                Needs Help
+              </Badge>
+            )}
+            {issue.helpStatus === "claimed" && (
+              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">
+                Possibly Claimed
+              </Badge>
+            )}
+            {issue.helpStatus === "resolved" && (
+              <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">
+                Likely Resolved
+              </Badge>
+            )}
+          </div>
         </div>
         <CardTitle className="text-lg leading-7">
           <a href={issue.url} target="_blank" rel="noreferrer" className="hover:underline">

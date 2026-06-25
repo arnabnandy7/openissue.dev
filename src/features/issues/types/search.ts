@@ -3,6 +3,8 @@ export type LabelOption = {
   label: string;
 };
 
+export type IssueStatus = "open" | "claimed" | "resolved";
+
 export type Issue = {
   id: string;
   title: string;
@@ -15,6 +17,7 @@ export type Issue = {
   updatedAt: string;
   assigned: boolean;
   qualityScore: number;
+  helpStatus?: IssueStatus;
 };
 
 export type SearchResponse = {
@@ -32,6 +35,7 @@ export type GitHubLabel = {
 };
 
 export type GitHubIssue = {
+  number: number;
   html_url: string;
   title: string;
   comments: number;

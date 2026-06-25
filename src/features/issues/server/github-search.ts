@@ -7,6 +7,7 @@ import type {
   GitHubIssue,
   GitHubRepo,
   GitHubSearchResponse,
+  IssueStatus,
   SearchResponse,
 } from "@/features/issues/types/search";
 
@@ -37,7 +38,38 @@ function getRepoFullName(repositoryUrl: string) {
     : repositoryUrl.split("/repos/").at(-1) ?? repositoryUrl;
 }
 
-function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo) {
+function analyzeThreadIntent(comments: Array<{ body: string }>): IssueStatus {
+  if (comments.length === 0) {
+    return "open";
+  }
+
+  const text = comments.map((c) => (c.body || "").toLowerCase()).join(" ");
+
+  const resolvedIndicators = [
+    "fixed in", "fixed by", "resolved", "closed by", "merged", 
+    "close this", "closing this", "already fixed", "already solved"
+  ];
+  
+  const claimedIndicators = [
+    "i'm on it", "i'm working on", "i am working on", "taking this up", 
+    "i will take this", "i will work on", "pr in progress", 
+    "assigned to", "working on it", "submitting a pr", "submitting a pull request"
+  ];
+
+  const resolvedMatch = resolvedIndicators.some(indicator => text.includes(indicator));
+  if (resolvedMatch) {
+    return "resolved";
+  }
+
+  const claimedMatch = claimedIndicators.some(indicator => text.includes(indicator));
+  if (claimedMatch) {
+    return "claimed";
+  }
+
+  return "open";
+}
+
+function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueStatus) {
   const ageDays =
     (Date.now() - new Date(issue.updated_at).getTime()) / (1000 * 60 * 60 * 24);
   const recencyScore = Math.max(0, 35 - ageDays * 1.5);
@@ -46,7 +78,15 @@ function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo) {
   const commentScore = Math.max(0, 15 - issue.comments * 1.5);
   const assignmentScore = issue.assignee || issue.assignees?.length ? 0 : 5;
 
-  return Math.round(recencyScore + starScore + labelScore + commentScore + assignmentScore);
+  let score = Math.round(recencyScore + starScore + labelScore + commentScore + assignmentScore);
+
+  if (helpStatus === "claimed") {
+    score = Math.max(0, score - 25);
+  } else if (helpStatus === "resolved") {
+    score = Math.max(0, score - 45);
+  }
+
+  return score;
 }
 
 async function githubFetch<T>(url: string, token?: string) {
@@ -117,11 +157,38 @@ export async function searchGitHubIssues({
     }),
   );
 
+  const commentEntries = await Promise.all(
+    search.data.items.map(async (issue) => {
+      if (issue.comments === 0 || !token) {
+        return [issue.html_url, [] as Array<{ body: string }>] as const;
+      }
+
+      const repoName = getRepoFullName(issue.repository_url);
+      try {
+        const commentsResult = await githubFetch<Array<{ body: string }>>(
+          `https://api.github.com/repos/${repoName}/issues/${issue.number}/comments?per_page=10`,
+          token
+        );
+        return [issue.html_url, commentsResult.data] as const;
+      } catch {
+        return [issue.html_url, [] as Array<{ body: string }>] as const;
+      }
+    })
+  );
+
+  const issueCommentsMap = new Map(commentEntries);
   const repos = new Map(repoEntries);
   const issues = search.data.items
     .map((issue) => {
       const repoName = getRepoFullName(issue.repository_url);
       const repo = repos.get(repoName);
+      const comments = issueCommentsMap.get(issue.html_url) ?? [];
+      const assigned = Boolean(issue.assignee || issue.assignees?.length);
+      
+      let helpStatus: IssueStatus = analyzeThreadIntent(comments);
+      if (assigned) {
+        helpStatus = "claimed";
+      }
 
       return {
         id: issue.html_url,
@@ -134,8 +201,9 @@ export async function searchGitHubIssues({
         labels: issue.labels.map((item) => item.name),
         updatedAt: issue.updated_at,
         createdAt: issue.created_at,
-        assigned: Boolean(issue.assignee || issue.assignees?.length),
-        qualityScore: scoreIssue(issue, repo),
+        assigned,
+        helpStatus,
+        qualityScore: scoreIssue(issue, repo, helpStatus),
       };
     })
     .sort((a, b) => b.qualityScore - a.qualityScore);
