@@ -124,7 +124,7 @@ export function IssueFinder() {
               </div>
 
               <Select value={label} onValueChange={setLabel}>
-                <SelectTrigger className="h-11 w-full" aria-label="Issue label">
+                <SelectTrigger className="h-11 w-full" size="lg" aria-label="Issue label">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -137,7 +137,7 @@ export function IssueFinder() {
               </Select>
 
               <Select value={sort} onValueChange={setSort}>
-                <SelectTrigger className="h-11 w-full" aria-label="Sort results">
+                <SelectTrigger className="h-11 w-full" size="lg" aria-label="Sort results">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
