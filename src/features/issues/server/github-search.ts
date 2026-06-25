@@ -89,14 +89,14 @@ function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueSta
   return score;
 }
 
-async function githubFetch<T>(url: string, token?: string) {
+async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
   const response = await fetch(url, {
     headers: {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    next: { revalidate: 60 },
+    next: { revalidate },
   });
 
   if (!response.ok) {
@@ -136,7 +136,7 @@ export async function searchGitHubIssues({
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", "24");
 
-  const search = await githubFetch<GitHubSearchResponse>(url.toString(), token);
+  const search = await githubFetch<GitHubSearchResponse>(url.toString(), token, 180);
   const repoNames = token
     ? Array.from(
         new Set(search.data.items.map((item) => getRepoFullName(item.repository_url))),
@@ -149,6 +149,7 @@ export async function searchGitHubIssues({
         const repo = await githubFetch<GitHubRepo>(
           `https://api.github.com/repos/${fullName}`,
           token,
+          7200, // Cache repository details for 2 hours
         );
         return [fullName, repo.data] as const;
       } catch {
@@ -167,7 +168,8 @@ export async function searchGitHubIssues({
       try {
         const commentsResult = await githubFetch<Array<{ body: string }>>(
           `https://api.github.com/repos/${repoName}/issues/${issue.number}/comments?per_page=10`,
-          token
+          token,
+          7200, // Cache comment details for 2 hours
         );
         return [issue.html_url, commentsResult.data] as const;
       } catch {
