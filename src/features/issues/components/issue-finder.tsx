@@ -51,6 +51,10 @@ export function IssueFinder() {
       LINKED_PR_OPTIONS.find((item) => item.value === linkedPr) ?? LINKED_PR_OPTIONS[0],
     [linkedPr],
   );
+  const selectedSort = useMemo(
+    () => SORT_OPTIONS.find((item) => item.value === sort) ?? SORT_OPTIONS[0],
+    [sort],
+  );
 
   async function searchIssues(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -123,9 +127,9 @@ export function IssueFinder() {
 
             <form
               onSubmit={searchIssues}
-              className="grid gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_170px_150px_150px_128px]"
+              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_minmax(170px,0.8fr)_minmax(160px,0.7fr)_minmax(170px,0.8fr)_128px]"
             >
-              <div className="relative">
+              <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={tech}
@@ -138,7 +142,7 @@ export function IssueFinder() {
 
               <Select value={label} onValueChange={setLabel}>
                 <SelectTrigger className="h-11 w-full" size="lg" aria-label="Issue label">
-                  <SelectValue />
+                  <SelectValue>{selectedLabel.label}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {LABEL_OPTIONS.map((option) => (
@@ -151,7 +155,7 @@ export function IssueFinder() {
 
               <Select value={sort} onValueChange={setSort}>
                 <SelectTrigger className="h-11 w-full" size="lg" aria-label="Sort results">
-                  <SelectValue />
+                  <SelectValue>{selectedSort.label}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {SORT_OPTIONS.map((option) => (
@@ -164,7 +168,7 @@ export function IssueFinder() {
 
               <Select value={linkedPr} onValueChange={setLinkedPr}>
                 <SelectTrigger className="h-11 w-full" size="lg" aria-label="Linked PR filter">
-                  <SelectValue />
+                  <SelectValue>{selectedLinkedPr.label}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {LINKED_PR_OPTIONS.map((option) => (
@@ -177,7 +181,7 @@ export function IssueFinder() {
 
               <Button
                 type="submit"
-                className="h-11 w-full gap-2 sm:col-span-2 xl:col-span-1"
+                className="h-11 w-full gap-2 sm:col-span-2 2xl:col-span-1"
                 disabled={isLoading || cooldown}
               >
                 <Search className="h-4 w-4" />
