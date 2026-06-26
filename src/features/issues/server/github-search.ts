@@ -143,11 +143,13 @@ export async function searchGitHubIssues({
   label: rawLabel,
   sort: rawSort,
   linkedPr: rawLinkedPr,
+  page = 1,
 }: {
   tech: string;
   label: string | null;
   sort: string | null;
   linkedPr: string | null;
+  page?: number;
 }): Promise<SearchResponse> {
   const label = GITHUB_LABELS[normalize(rawLabel)] ?? "help wanted";
   const sort = GITHUB_SORTS.has(rawSort ?? "") ? rawSort! : "updated";
@@ -173,6 +175,7 @@ export async function searchGitHubIssues({
   url.searchParams.set("sort", sort);
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", "24");
+  url.searchParams.set("page", String(page));
 
   const search = await githubFetch<GitHubSearchResponse>(url.toString(), token, 180);
   const repoNames = token
@@ -273,5 +276,6 @@ export async function searchGitHubIssues({
     rateLimitRemaining: search.rateLimitRemaining,
     tokenConfigured: Boolean(token),
     issues,
+    page,
   };
 }

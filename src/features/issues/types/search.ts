@@ -27,6 +27,7 @@ export type SearchResponse = {
   rateLimitRemaining: string | null;
   tokenConfigured: boolean;
   issues: Issue[];
+  page: number;
   error?: string;
 };
 
