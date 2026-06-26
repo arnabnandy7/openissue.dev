@@ -25,6 +25,7 @@ import { LoadingResults } from "@/features/issues/components/loading-results";
 import { Metric } from "@/features/issues/components/metric";
 import {
   LABEL_OPTIONS,
+  LINKED_PR_OPTIONS,
   SORT_OPTIONS,
   TECH_EXAMPLES,
 } from "@/features/issues/data/search-options";
@@ -35,6 +36,7 @@ export function IssueFinder() {
   const [tech, setTech] = useState("Java");
   const [label, setLabel] = useState("help-wanted");
   const [sort, setSort] = useState("updated");
+  const [linkedPr, setLinkedPr] = useState("any");
   const [data, setData] = useState<SearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,11 @@ export function IssueFinder() {
   const selectedLabel = useMemo(
     () => LABEL_OPTIONS.find((item) => item.value === label) ?? LABEL_OPTIONS[0],
     [label],
+  );
+  const selectedLinkedPr = useMemo(
+    () =>
+      LINKED_PR_OPTIONS.find((item) => item.value === linkedPr) ?? LINKED_PR_OPTIONS[0],
+    [linkedPr],
   );
 
   async function searchIssues(event?: FormEvent<HTMLFormElement>) {
@@ -61,6 +68,7 @@ export function IssueFinder() {
       tech: tech.trim(),
       label,
       sort,
+      linkedPr,
     });
 
     try {
@@ -115,7 +123,7 @@ export function IssueFinder() {
 
             <form
               onSubmit={searchIssues}
-              className="grid gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-[minmax(180px,1fr)_190px_170px_128px]"
+              className="grid gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_170px_150px_150px_128px]"
             >
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -154,9 +162,22 @@ export function IssueFinder() {
                 </SelectContent>
               </Select>
 
+              <Select value={linkedPr} onValueChange={setLinkedPr}>
+                <SelectTrigger className="h-11 w-full" size="lg" aria-label="Linked PR filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LINKED_PR_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Button
                 type="submit"
-                className="h-11 w-full gap-2"
+                className="h-11 w-full gap-2 sm:col-span-2 xl:col-span-1"
                 disabled={isLoading || cooldown}
               >
                 <Search className="h-4 w-4" />
@@ -176,6 +197,7 @@ export function IssueFinder() {
             <CardContent className="grid grid-cols-2 gap-3 text-sm">
               <Metric label="Label" value={selectedLabel.label} />
               <Metric label="Sort" value={sort === "created" ? "newest" : sort} />
+              <Metric label="Linked PR" value={selectedLinkedPr.label.replace("Linked PR: ", "")} />
               <Metric label="Results" value={data ? compactNumber(data.totalCount) : "-"} />
               <Metric
                 label="GitHub token"

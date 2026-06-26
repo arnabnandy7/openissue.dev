@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clock3, MessageCircle, Star } from "lucide-react";
+import { ArrowUpRight, Clock3, GitPullRequest, MessageCircle, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +81,10 @@ export function IssueCard({ issue }: { issue: Issue }) {
             <span className="inline-flex items-center gap-1.5">
               <MessageCircle className="h-4 w-4" />
               {issue.comments}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <GitPullRequest className="h-4 w-4" />
+              {issue.linkedPrCount ?? "-"}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Clock3 className="h-4 w-4" />
