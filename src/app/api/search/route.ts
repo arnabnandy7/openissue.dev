@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   }
 
   const pageParam = searchParams.get("page");
-  const page = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1;
+  const page = pageParam ? Math.max(1, Number.parseInt(pageParam, 10) || 1) : 1;
 
   try {
     const payload = await searchGitHubIssues({
