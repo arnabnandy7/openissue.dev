@@ -43,12 +43,16 @@ export async function GET(request: Request) {
     );
   }
 
+  const pageParam = searchParams.get("page");
+  const page = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1;
+
   try {
     const payload = await searchGitHubIssues({
       tech,
       label: searchParams.get("label"),
       sort: searchParams.get("sort"),
       linkedPr: searchParams.get("linkedPr"),
+      page,
     });
 
     return NextResponse.json(payload);

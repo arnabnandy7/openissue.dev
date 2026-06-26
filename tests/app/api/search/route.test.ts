@@ -19,6 +19,7 @@ describe("GET /api/search", () => {
       rateLimitRemaining: "4999",
       tokenConfigured: false,
       issues: [],
+      page: 1,
     });
   });
 
@@ -48,6 +49,7 @@ describe("GET /api/search", () => {
       label: "good-first-issue",
       sort: "created",
       linkedPr: "yes",
+      page: 1,
     });
   });
 

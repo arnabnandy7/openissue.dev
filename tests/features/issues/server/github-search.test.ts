@@ -100,6 +100,8 @@ describe("searchGitHubIssues", () => {
     expect(searchUrl.searchParams.get("q")).toBe(
       'is:issue is:open archived:false language:TypeScript label:"good first issue" linked:pr',
     );
+    expect(searchUrl.searchParams.get("page")).toBe("1");
+    expect(result.page).toBe(1);
     expect(result.issues[0]).toMatchObject({
       repo: "acme/widgets",
       linkedPrCount: 1,

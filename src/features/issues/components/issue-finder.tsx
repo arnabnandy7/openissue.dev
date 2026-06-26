@@ -30,7 +30,7 @@ import {
   TECH_EXAMPLES,
 } from "@/features/issues/data/search-options";
 import { compactNumber } from "@/features/issues/lib/format";
-import type { SearchResponse } from "@/features/issues/types/search";
+import type { SearchResponse, Issue } from "@/features/issues/types/search";
 
 export function IssueFinder() {
   const [tech, setTech] = useState("Java");
@@ -38,7 +38,10 @@ export function IssueFinder() {
   const [sort, setSort] = useState("updated");
   const [linkedPr, setLinkedPr] = useState("any");
   const [data, setData] = useState<SearchResponse | null>(null);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(false);
 
@@ -56,6 +59,11 @@ export function IssueFinder() {
     [sort],
   );
 
+  const hasMore = useMemo(() => {
+    if (!data) return false;
+    return issues.length < data.totalCount && data.issues.length === 24;
+  }, [data, issues]);
+
   async function searchIssues(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
@@ -67,6 +75,8 @@ export function IssueFinder() {
     setIsLoading(true);
     setCooldown(true);
     setError(null);
+    setIssues([]);
+    setPage(1);
 
     const params = new URLSearchParams({
       tech: tech.trim(),
@@ -84,6 +94,7 @@ export function IssueFinder() {
       }
 
       setData(payload);
+      setIssues(payload.issues);
     } catch (searchError) {
       setError(
         searchError instanceof Error
@@ -95,6 +106,43 @@ export function IssueFinder() {
       setTimeout(() => {
         setCooldown(false);
       }, 3000);
+    }
+  }
+
+  async function loadMoreIssues() {
+    if (isLoadingMore || !tech.trim() || !data) return;
+
+    setIsLoadingMore(true);
+    setError(null);
+
+    const nextPage = page + 1;
+    const params = new URLSearchParams({
+      tech: tech.trim(),
+      label,
+      sort,
+      linkedPr,
+      page: String(nextPage),
+    });
+
+    try {
+      const response = await fetch(`/api/search?${params.toString()}`);
+      const payload = (await response.json()) as SearchResponse;
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load more issues.");
+      }
+
+      setIssues((prev) => [...prev, ...payload.issues]);
+      setPage(nextPage);
+      setData(payload);
+    } catch (searchError) {
+      setError(
+        searchError instanceof Error
+          ? searchError.message
+          : "Failed to load more issues.",
+      );
+    } finally {
+      setIsLoadingMore(false);
     }
   }
 
@@ -288,7 +336,7 @@ export function IssueFinder() {
 
           {isLoading ? <LoadingResults /> : null}
 
-          {!isLoading && data?.issues.length === 0 ? (
+          {!isLoading && data && issues.length === 0 ? (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">No matching issues</CardTitle>
@@ -299,7 +347,22 @@ export function IssueFinder() {
             </Card>
           ) : null}
 
-          {!isLoading && data?.issues.map((issue) => <IssueCard key={issue.id} issue={issue} />)}
+          {!isLoading && issues.map((issue) => <IssueCard key={issue.id} issue={issue} />)}
+
+          {!isLoading && hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={loadMoreIssues}
+                disabled={isLoadingMore}
+                className="w-full max-w-[200px]"
+              >
+                {isLoadingMore ? "Loading more..." : "Load More"}
+              </Button>
+            </div>
+          )}
         </div>
       </section>
     </main>
