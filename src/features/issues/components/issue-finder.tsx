@@ -127,7 +127,7 @@ export function IssueFinder() {
 
             <form
               onSubmit={searchIssues}
-              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_minmax(170px,0.8fr)_minmax(160px,0.7fr)_minmax(170px,0.8fr)_128px]"
+              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_1fr_1.1fr_auto]"
             >
               <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -181,7 +181,7 @@ export function IssueFinder() {
 
               <Button
                 type="submit"
-                className="h-11 w-full gap-2 sm:col-span-2 2xl:col-span-1"
+                className="h-11 w-full gap-2 sm:col-span-2 xl:col-span-1"
                 disabled={isLoading || cooldown}
               >
                 <Search className="h-4 w-4" />
