@@ -59,3 +59,13 @@ export const SORT_OPTIONS = [
 ];
 
 export const GITHUB_SORTS = new Set(SORT_OPTIONS.map((option) => option.value));
+
+export const LINKED_PR_OPTIONS = [
+  { value: "any", label: "Any linked PRs" },
+  { value: "yes", label: "Linked PR: Yes" },
+  { value: "no", label: "Linked PR: No" },
+];
+
+export const LINKED_PR_FILTERS = new Set(
+  LINKED_PR_OPTIONS.map((option) => option.value),
+);

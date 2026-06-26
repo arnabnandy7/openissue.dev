@@ -48,6 +48,7 @@ export async function GET(request: Request) {
       tech,
       label: searchParams.get("label"),
       sort: searchParams.get("sort"),
+      linkedPr: searchParams.get("linkedPr"),
     });
 
     return NextResponse.json(payload);

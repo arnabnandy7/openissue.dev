@@ -1,12 +1,14 @@
 import {
   GITHUB_LABELS,
   GITHUB_SORTS,
+  LINKED_PR_FILTERS,
   LANGUAGE_ALIASES,
 } from "@/features/issues/data/search-options";
 import type {
   GitHubIssue,
   GitHubRepo,
   GitHubSearchResponse,
+  GitHubTimelineEvent,
   IssueStatus,
   SearchResponse,
 } from "@/features/issues/types/search";
@@ -28,6 +30,18 @@ function buildTechQualifier(tech: string) {
   }
 
   return quoteSearchValue(tech.trim());
+}
+
+function buildLinkedPrQualifier(linkedPr: string) {
+  if (linkedPr === "yes") {
+    return "linked:pr";
+  }
+
+  if (linkedPr === "no") {
+    return "-linked:pr";
+  }
+
+  return null;
 }
 
 function getRepoFullName(repositoryUrl: string) {
@@ -67,6 +81,20 @@ function analyzeThreadIntent(comments: Array<{ body: string }>): IssueStatus {
   }
 
   return "open";
+}
+
+function countLinkedPullRequests(events: GitHubTimelineEvent[]) {
+  const linkedPullRequests = new Set<string>();
+
+  for (const event of events) {
+    const issue = event.source?.issue;
+
+    if (event.event === "cross-referenced" && issue?.pull_request && issue.html_url) {
+      linkedPullRequests.add(issue.html_url);
+    }
+  }
+
+  return linkedPullRequests.size;
 }
 
 function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueStatus) {
@@ -114,20 +142,30 @@ export async function searchGitHubIssues({
   tech,
   label: rawLabel,
   sort: rawSort,
+  linkedPr: rawLinkedPr,
 }: {
   tech: string;
   label: string | null;
   sort: string | null;
+  linkedPr: string | null;
 }): Promise<SearchResponse> {
   const label = GITHUB_LABELS[normalize(rawLabel)] ?? "help wanted";
   const sort = GITHUB_SORTS.has(rawSort ?? "") ? rawSort! : "updated";
-  const query = [
+  const linkedPr = LINKED_PR_FILTERS.has(rawLinkedPr ?? "") ? rawLinkedPr! : "any";
+  const queryParts = [
     "is:issue",
     "is:open",
     "archived:false",
     buildTechQualifier(tech),
     `label:${quoteSearchValue(label)}`,
-  ].join(" ");
+  ];
+  const linkedPrQualifier = buildLinkedPrQualifier(linkedPr);
+
+  if (linkedPrQualifier) {
+    queryParts.push(linkedPrQualifier);
+  }
+
+  const query = queryParts.join(" ");
 
   const token = process.env.GITHUB_TOKEN;
   const url = new URL("https://api.github.com/search/issues");
@@ -178,7 +216,25 @@ export async function searchGitHubIssues({
     })
   );
 
+  const linkedPrEntries = await Promise.all(
+    search.data.items.map(async (issue) => {
+      const repoName = getRepoFullName(issue.repository_url);
+
+      try {
+        const timelineResult = await githubFetch<GitHubTimelineEvent[]>(
+          `https://api.github.com/repos/${repoName}/issues/${issue.number}/timeline?per_page=100`,
+          token,
+          7200,
+        );
+        return [issue.html_url, countLinkedPullRequests(timelineResult.data)] as const;
+      } catch {
+        return [issue.html_url, null] as const;
+      }
+    }),
+  );
+
   const issueCommentsMap = new Map(commentEntries);
+  const linkedPrCountMap = new Map(linkedPrEntries);
   const repos = new Map(repoEntries);
   const issues = search.data.items
     .map((issue) => {
@@ -204,6 +260,7 @@ export async function searchGitHubIssues({
         updatedAt: issue.updated_at,
         createdAt: issue.created_at,
         assigned,
+        linkedPrCount: linkedPrCountMap.get(issue.html_url) ?? null,
         helpStatus,
         qualityScore: scoreIssue(issue, repo, helpStatus),
       };

@@ -16,6 +16,7 @@ export type Issue = {
   labels: string[];
   updatedAt: string;
   assigned: boolean;
+  linkedPrCount: number | null;
   qualityScore: number;
   helpStatus?: IssueStatus;
 };
@@ -57,4 +58,14 @@ export type GitHubRepo = {
   html_url: string;
   stargazers_count: number;
   archived: boolean;
+};
+
+export type GitHubTimelineEvent = {
+  event: string;
+  source?: {
+    issue?: {
+      html_url?: string;
+      pull_request?: unknown;
+    };
+  };
 };
