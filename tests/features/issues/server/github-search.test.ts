@@ -30,6 +30,15 @@ function githubIssue(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function searchPageResponses(items: ReturnType<typeof githubIssue>[], totalCount = items.length) {
+  return Array.from({ length: 5 }, () =>
+    jsonResponse({
+      total_count: totalCount,
+      items,
+    }),
+  );
+}
+
 describe("searchGitHubIssues", () => {
   beforeEach(() => {
     vi.setSystemTime(new Date("2026-06-26T12:00:00.000Z"));
@@ -47,12 +56,19 @@ describe("searchGitHubIssues", () => {
   });
 
   it("adds the linked PR qualifier and maps linked PR counts", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(searchPageResponses([githubIssue()])[0])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue()])[1])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue()])[2])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue()])[3])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue()])[4])
       .mockResolvedValueOnce(
         jsonResponse({
-          total_count: 1,
-          items: [githubIssue()],
+          full_name: "acme/widgets",
+          html_url: "https://github.com/acme/widgets",
+          stargazers_count: 2500,
         }),
       )
       .mockResolvedValueOnce(
@@ -106,18 +122,14 @@ describe("searchGitHubIssues", () => {
       repo: "acme/widgets",
       linkedPrCount: 1,
     });
+    expect(result.candidateCount).toBe(1);
   });
 
   it("adds the negative linked PR qualifier for no-linked-PR searches", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          total_count: 1,
-          items: [githubIssue()],
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse([]));
+    const fetchMock = vi.fn();
+    searchPageResponses([githubIssue()]).forEach((response) => {
+      fetchMock.mockResolvedValueOnce(response);
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -135,15 +147,10 @@ describe("searchGitHubIssues", () => {
   });
 
   it("falls back to default sort, label, and linked PR filter for invalid inputs", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          total_count: 1,
-          items: [githubIssue()],
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse([]));
+    const fetchMock = vi.fn();
+    searchPageResponses([githubIssue()]).forEach((response) => {
+      fetchMock.mockResolvedValueOnce(response);
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -161,16 +168,74 @@ describe("searchGitHubIssues", () => {
     expect(searchUrl.searchParams.get("sort")).toBe("updated");
   });
 
-  it("uses repository and comment enrichment when a GitHub token is configured", async () => {
-    process.env.GITHUB_TOKEN = "test-token";
+  it("returns the highest scored candidates on the first result page", async () => {
+    const lowerScoreIssue = githubIssue({
+      html_url: "https://github.com/acme/widgets/issues/1",
+      comments: 20,
+      updated_at: "2026-06-01T10:00:00.000Z",
+    });
+    const higherScoreIssue = githubIssue({
+      html_url: "https://github.com/acme/widgets/issues/2",
+      comments: 0,
+      updated_at: "2026-06-26T11:00:00.000Z",
+      labels: [{ name: "help wanted" }, { name: "good first issue" }],
+    });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         jsonResponse({
-          total_count: 1,
-          items: [githubIssue({ comments: 1 })],
+          total_count: 2,
+          items: [lowerScoreIssue],
         }),
       )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 2,
+          items: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 2,
+          items: [higherScoreIssue],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 2,
+          items: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 2,
+          items: [],
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await searchGitHubIssues({
+      tech: "Java",
+      label: "help-wanted",
+      sort: "updated",
+      linkedPr: "any",
+    });
+
+    expect(result.issues[0].id).toBe("https://github.com/acme/widgets/issues/2");
+    expect(result.candidateCount).toBe(2);
+    expect(result.totalCount).toBe(2);
+  });
+
+  it("uses repository and comment enrichment when a GitHub token is configured", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(searchPageResponses([githubIssue({ comments: 1 })])[0])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue({ comments: 1 })])[1])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue({ comments: 1 })])[2])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue({ comments: 1 })])[3])
+      .mockResolvedValueOnce(searchPageResponses([githubIssue({ comments: 1 })])[4])
       .mockResolvedValueOnce(
         jsonResponse({
           full_name: "acme/widgets",

@@ -16,6 +16,7 @@ describe("GET /api/search", () => {
     searchGitHubIssues.mockResolvedValue({
       query: "is:issue",
       totalCount: 0,
+      candidateCount: 0,
       rateLimitRemaining: "4999",
       tokenConfigured: false,
       issues: [],

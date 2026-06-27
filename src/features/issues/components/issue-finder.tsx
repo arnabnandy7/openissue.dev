@@ -30,6 +30,7 @@ import {
   TECH_EXAMPLES,
 } from "@/features/issues/data/search-options";
 import { compactNumber } from "@/features/issues/lib/format";
+import { mergeRankedIssues, rankIssues } from "@/features/issues/lib/ranking";
 import type { SearchResponse, Issue } from "@/features/issues/types/search";
 
 export function IssueFinder() {
@@ -61,7 +62,7 @@ export function IssueFinder() {
 
   const hasMore = useMemo(() => {
     if (!data) return false;
-    return issues.length < data.totalCount && data.issues.length === 24;
+    return issues.length < data.candidateCount && data.issues.length === 24;
   }, [data, issues]);
 
   async function searchIssues(event?: FormEvent<HTMLFormElement>) {
@@ -94,7 +95,7 @@ export function IssueFinder() {
       }
 
       setData(payload);
-      setIssues(payload.issues);
+      setIssues(rankIssues(payload.issues));
     } catch (searchError) {
       setError(
         searchError instanceof Error
@@ -132,7 +133,7 @@ export function IssueFinder() {
         throw new Error(payload.error ?? "Failed to load more issues.");
       }
 
-      setIssues((prev) => [...prev, ...payload.issues]);
+      setIssues((prev) => mergeRankedIssues(prev, payload.issues));
       setPage(nextPage);
       setData(payload);
     } catch (searchError) {
@@ -250,7 +251,8 @@ export function IssueFinder() {
               <Metric label="Label" value={selectedLabel.label} />
               <Metric label="Sort" value={sort === "created" ? "newest" : sort} />
               <Metric label="Linked PR" value={selectedLinkedPr.label.replace("Linked PR: ", "")} />
-              <Metric label="Results" value={data ? compactNumber(data.totalCount) : "-"} />
+              <Metric label="Ranked" value={data ? compactNumber(data.candidateCount) : "-"} />
+              <Metric label="Matches" value={data ? compactNumber(data.totalCount) : "-"} />
               <Metric
                 label="GitHub token"
                 value={data?.tokenConfigured ? "configured" : "not set"}
@@ -321,7 +323,12 @@ export function IssueFinder() {
                 <h2 className="text-xl font-semibold">Ranked issues</h2>
                 <p className="text-sm text-muted-foreground">{data.query}</p>
               </div>
-              <Badge variant="secondary">{compactNumber(data.totalCount)} GitHub matches</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">
+                  {compactNumber(data.candidateCount)} ranked candidates
+                </Badge>
+                <Badge variant="outline">{compactNumber(data.totalCount)} GitHub matches</Badge>
+              </div>
             </div>
           ) : (
             <Card>
