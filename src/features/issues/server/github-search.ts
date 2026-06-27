@@ -4,6 +4,7 @@ import {
   LINKED_PR_FILTERS,
   LANGUAGE_ALIASES,
 } from "@/features/issues/data/search-options";
+import { rankIssues } from "@/features/issues/lib/ranking";
 import type {
   GitHubIssue,
   GitHubRepo,
@@ -239,8 +240,8 @@ export async function searchGitHubIssues({
   const issueCommentsMap = new Map(commentEntries);
   const linkedPrCountMap = new Map(linkedPrEntries);
   const repos = new Map(repoEntries);
-  const issues = search.data.items
-    .map((issue) => {
+  const issues = rankIssues(
+    search.data.items.map((issue) => {
       const repoName = getRepoFullName(issue.repository_url);
       const repo = repos.get(repoName);
       const comments = issueCommentsMap.get(issue.html_url) ?? [];
@@ -267,8 +268,8 @@ export async function searchGitHubIssues({
         helpStatus,
         qualityScore: scoreIssue(issue, repo, helpStatus),
       };
-    })
-    .sort((a, b) => b.qualityScore - a.qualityScore);
+    }),
+  );
 
   return {
     query,

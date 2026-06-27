@@ -30,6 +30,7 @@ import {
   TECH_EXAMPLES,
 } from "@/features/issues/data/search-options";
 import { compactNumber } from "@/features/issues/lib/format";
+import { mergeRankedIssues, rankIssues } from "@/features/issues/lib/ranking";
 import type { SearchResponse, Issue } from "@/features/issues/types/search";
 
 export function IssueFinder() {
@@ -94,7 +95,7 @@ export function IssueFinder() {
       }
 
       setData(payload);
-      setIssues(payload.issues);
+      setIssues(rankIssues(payload.issues));
     } catch (searchError) {
       setError(
         searchError instanceof Error
@@ -132,7 +133,7 @@ export function IssueFinder() {
         throw new Error(payload.error ?? "Failed to load more issues.");
       }
 
-      setIssues((prev) => [...prev, ...payload.issues]);
+      setIssues((prev) => mergeRankedIssues(prev, payload.issues));
       setPage(nextPage);
       setData(payload);
     } catch (searchError) {
