@@ -10,9 +10,13 @@ import type {
   GitHubRepo,
   GitHubSearchResponse,
   GitHubTimelineEvent,
+  Issue,
   IssueStatus,
   SearchResponse,
 } from "@/features/issues/types/search";
+
+const PAGE_SIZE = 24;
+const CANDIDATE_PAGE_COUNT = 5;
 
 function normalize(value: string | null) {
   return (value ?? "").trim().toLowerCase();
@@ -118,6 +122,16 @@ function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueSta
   return score;
 }
 
+function dedupeIssues(issues: GitHubIssue[]) {
+  const issueMap = new Map<string, GitHubIssue>();
+
+  for (const issue of issues) {
+    issueMap.set(issue.html_url, issue);
+  }
+
+  return Array.from(issueMap.values());
+}
+
 async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
   const response = await fetch(url, {
     headers: {
@@ -171,17 +185,24 @@ export async function searchGitHubIssues({
   const query = queryParts.join(" ");
 
   const token = process.env.GITHUB_TOKEN;
-  const url = new URL("https://api.github.com/search/issues");
-  url.searchParams.set("q", query);
-  url.searchParams.set("sort", sort);
-  url.searchParams.set("order", "desc");
-  url.searchParams.set("per_page", "24");
-  url.searchParams.set("page", String(page));
-
-  const search = await githubFetch<GitHubSearchResponse>(url.toString(), token, 180);
+  const searchUrls = Array.from({ length: CANDIDATE_PAGE_COUNT }, (_, index) => {
+    const url = new URL("https://api.github.com/search/issues");
+    url.searchParams.set("q", query);
+    url.searchParams.set("sort", sort);
+    url.searchParams.set("order", "desc");
+    url.searchParams.set("per_page", String(PAGE_SIZE));
+    url.searchParams.set("page", String(index + 1));
+    return url.toString();
+  });
+  const searchResults = await Promise.all(
+    searchUrls.map((url) => githubFetch<GitHubSearchResponse>(url, token, 180)),
+  );
+  const totalCount = searchResults[0]?.data.total_count ?? 0;
+  const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
+  const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
   const repoNames = token
     ? Array.from(
-        new Set(search.data.items.map((item) => getRepoFullName(item.repository_url))),
+        new Set(candidateIssues.map((item) => getRepoFullName(item.repository_url))),
       )
     : [];
 
@@ -201,7 +222,7 @@ export async function searchGitHubIssues({
   );
 
   const commentEntries = await Promise.all(
-    search.data.items.map(async (issue) => {
+    candidateIssues.map(async (issue) => {
       if (issue.comments === 0 || !token) {
         return [issue.html_url, [] as Array<{ body: string }>] as const;
       }
@@ -217,31 +238,32 @@ export async function searchGitHubIssues({
       } catch {
         return [issue.html_url, [] as Array<{ body: string }>] as const;
       }
-    })
-  );
-
-  const linkedPrEntries = await Promise.all(
-    search.data.items.map(async (issue) => {
-      const repoName = getRepoFullName(issue.repository_url);
-
-      try {
-        const timelineResult = await githubFetch<GitHubTimelineEvent[]>(
-          `https://api.github.com/repos/${repoName}/issues/${issue.number}/timeline?per_page=100`,
-          token,
-          7200,
-        );
-        return [issue.html_url, countLinkedPullRequests(timelineResult.data)] as const;
-      } catch {
-        return [issue.html_url, null] as const;
-      }
     }),
   );
 
+  async function fetchLinkedPrCount(issue: GitHubIssue) {
+    if (!token) {
+      return [issue.html_url, null] as const;
+    }
+
+    const repoName = getRepoFullName(issue.repository_url);
+
+    try {
+      const timelineResult = await githubFetch<GitHubTimelineEvent[]>(
+        `https://api.github.com/repos/${repoName}/issues/${issue.number}/timeline?per_page=100`,
+        token,
+        7200,
+      );
+      return [issue.html_url, countLinkedPullRequests(timelineResult.data)] as const;
+    } catch {
+      return [issue.html_url, null] as const;
+    }
+  }
+
   const issueCommentsMap = new Map(commentEntries);
-  const linkedPrCountMap = new Map(linkedPrEntries);
   const repos = new Map(repoEntries);
-  const issues = rankIssues(
-    search.data.items.map((issue) => {
+  const rankedIssues = rankIssues(
+    candidateIssues.map((issue): Issue => {
       const repoName = getRepoFullName(issue.repository_url);
       const repo = repos.get(repoName);
       const comments = issueCommentsMap.get(issue.html_url) ?? [];
@@ -264,17 +286,32 @@ export async function searchGitHubIssues({
         updatedAt: issue.updated_at,
         createdAt: issue.created_at,
         assigned,
-        linkedPrCount: linkedPrCountMap.get(issue.html_url) ?? null,
+        linkedPrCount: null,
         helpStatus,
         qualityScore: scoreIssue(issue, repo, helpStatus),
       };
     }),
   );
+  const start = (page - 1) * PAGE_SIZE;
+  const selectedIssues = rankedIssues.slice(start, start + PAGE_SIZE);
+  const selectedIssueMap = new Map(candidateIssues.map((issue) => [issue.html_url, issue]));
+  const linkedPrEntries = await Promise.all(
+    selectedIssues
+      .map((issue) => selectedIssueMap.get(issue.id))
+      .filter((issue): issue is GitHubIssue => Boolean(issue))
+      .map(fetchLinkedPrCount),
+  );
+  const linkedPrCountMap = new Map(linkedPrEntries);
+  const issues = selectedIssues.map((issue) => ({
+    ...issue,
+    linkedPrCount: linkedPrCountMap.get(issue.id) ?? null,
+  }));
 
   return {
     query,
-    totalCount: search.data.total_count,
-    rateLimitRemaining: search.rateLimitRemaining,
+    totalCount,
+    candidateCount: rankedIssues.length,
+    rateLimitRemaining,
     tokenConfigured: Boolean(token),
     issues,
     page,

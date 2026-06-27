@@ -15,6 +15,7 @@ export type Issue = {
   comments: number;
   labels: string[];
   updatedAt: string;
+  createdAt: string;
   assigned: boolean;
   linkedPrCount: number | null;
   qualityScore: number;
@@ -24,6 +25,7 @@ export type Issue = {
 export type SearchResponse = {
   query: string;
   totalCount: number;
+  candidateCount: number;
   rateLimitRemaining: string | null;
   tokenConfigured: boolean;
   issues: Issue[];

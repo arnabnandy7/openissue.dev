@@ -13,6 +13,7 @@ function issue(overrides: Partial<Issue>): Issue {
     comments: 0,
     labels: ["help wanted"],
     updatedAt: "2026-06-20T10:00:00.000Z",
+    createdAt: "2026-06-19T10:00:00.000Z",
     assigned: false,
     linkedPrCount: 0,
     qualityScore: 50,
