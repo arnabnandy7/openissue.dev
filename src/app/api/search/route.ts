@@ -52,6 +52,7 @@ export async function GET(request: Request) {
       label: searchParams.get("label"),
       sort: searchParams.get("sort"),
       linkedPr: searchParams.get("linkedPr"),
+      hacktoberfest: searchParams.get("hacktoberfest"),
       page,
     });
 

@@ -40,7 +40,7 @@ describe("GET /api/search", () => {
 
     const response = await GET(
       new Request(
-        "http://localhost/api/search?tech=React&label=good-first-issue&sort=created&linkedPr=yes",
+        "http://localhost/api/search?tech=React&label=good-first-issue&sort=created&linkedPr=yes&hacktoberfest=only",
       ),
     );
 
@@ -50,6 +50,7 @@ describe("GET /api/search", () => {
       label: "good-first-issue",
       sort: "created",
       linkedPr: "yes",
+      hacktoberfest: "only",
       page: 1,
     });
   });

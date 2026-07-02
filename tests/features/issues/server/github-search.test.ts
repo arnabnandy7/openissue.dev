@@ -168,6 +168,88 @@ describe("searchGitHubIssues", () => {
     expect(searchUrl.searchParams.get("sort")).toBe("updated");
   });
 
+  it("filters Hacktoberfest-ready issues by repo topic or issue label", async () => {
+    const topicIssue = githubIssue({
+      html_url: "https://github.com/acme/hacktober/issues/1",
+      repository_url: "https://api.github.com/repos/acme/hacktober",
+      labels: [{ name: "help wanted" }],
+    });
+    const labelIssue = githubIssue({
+      html_url: "https://github.com/acme/labeled/issues/2",
+      repository_url: "https://api.github.com/repos/acme/labeled",
+      labels: [{ name: "help wanted" }, { name: "Hacktoberfest" }],
+    });
+    const plainIssue = githubIssue({
+      html_url: "https://github.com/acme/plain/issues/3",
+      repository_url: "https://api.github.com/repos/acme/plain",
+      labels: [{ name: "help wanted" }],
+    });
+    const fetchMock = vi.fn();
+    searchPageResponses([topicIssue, labelIssue, plainIssue], 3).forEach((response) => {
+      fetchMock.mockResolvedValueOnce(response);
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          full_name: "acme/hacktober",
+          html_url: "https://github.com/acme/hacktober",
+          stargazers_count: 100,
+          topics: ["hacktoberfest"],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          full_name: "acme/labeled",
+          html_url: "https://github.com/acme/labeled",
+          stargazers_count: 100,
+          topics: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          full_name: "acme/plain",
+          html_url: "https://github.com/acme/plain",
+          stargazers_count: 100,
+          topics: [],
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await searchGitHubIssues({
+      tech: "Java",
+      label: "help-wanted",
+      sort: "updated",
+      linkedPr: "any",
+      hacktoberfest: "only",
+    });
+
+    const searchUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(searchUrl.searchParams.get("q")).toBe(
+      'is:issue is:open archived:false language:Java label:"help wanted"',
+    );
+    expect(result.candidateCount).toBe(2);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "https://github.com/acme/hacktober/issues/1",
+          hacktoberfest: true,
+          hacktoberfestSource: "repo-topic",
+        }),
+        expect.objectContaining({
+          id: "https://github.com/acme/labeled/issues/2",
+          hacktoberfest: true,
+          hacktoberfestSource: "issue-label",
+        }),
+      ]),
+    );
+    expect(result.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "https://github.com/acme/plain/issues/3" }),
+      ]),
+    );
+  });
+
   it("returns the highest scored candidates on the first result page", async () => {
     const lowerScoreIssue = githubIssue({
       html_url: "https://github.com/acme/widgets/issues/1",
