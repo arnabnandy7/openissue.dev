@@ -106,7 +106,7 @@ describe("searchGitHubIssues", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await searchGitHubIssues({
-      tech: "React",
+      tech: "TypeScript",
       label: "good-first-issue",
       sort: "updated",
       linkedPr: "yes",
@@ -123,6 +123,64 @@ describe("searchGitHubIssues", () => {
       linkedPrCount: 1,
     });
     expect(result.candidateCount).toBe(1);
+  });
+
+  it("searches framework terms by repository topic instead of issue text", async () => {
+    const springIssue = githubIssue({
+      html_url: "https://github.com/spring-projects/spring-boot/issues/123",
+      repository_url: "https://api.github.com/repos/spring-projects/spring-boot",
+      title: "Improve actuator diagnostics",
+      labels: [{ name: "help wanted" }],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 1,
+          items: [
+            {
+              full_name: "spring-projects/spring-boot",
+              html_url: "https://github.com/spring-projects/spring-boot",
+              stargazers_count: 82000,
+              archived: false,
+              topics: ["spring-boot"],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_count: 1,
+          items: [springIssue],
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await searchGitHubIssues({
+      tech: "Spring Boot",
+      label: "help-wanted",
+      sort: "updated",
+      linkedPr: "any",
+    });
+
+    const repoSearchUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    const issueSearchUrl = new URL(fetchMock.mock.calls[1][0] as string);
+    const issueQuery = issueSearchUrl.searchParams.get("q") ?? "";
+
+    expect(repoSearchUrl.pathname).toBe("/search/repositories");
+    expect(repoSearchUrl.searchParams.get("q")).toBe(
+      "topic:spring-boot archived:false language:Java",
+    );
+    expect(issueSearchUrl.pathname).toBe("/search/issues");
+    expect(issueQuery).toBe(
+      "is:issue is:open archived:false label:\"help wanted\" repo:spring-projects/spring-boot",
+    );
+    expect(issueQuery).not.toContain("Spring Boot");
+    expect(result.issues[0]).toMatchObject({
+      repo: "spring-projects/spring-boot",
+      stars: 82000,
+    });
   });
 
   it("adds the negative linked PR qualifier for no-linked-PR searches", async () => {
@@ -332,7 +390,7 @@ describe("searchGitHubIssues", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await searchGitHubIssues({
-      tech: "React",
+      tech: "TypeScript",
       label: "good-first-issue",
       sort: "updated",
       linkedPr: "any",

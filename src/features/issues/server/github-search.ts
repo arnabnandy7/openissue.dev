@@ -4,11 +4,13 @@ import {
   HACKTOBERFEST_FILTERS,
   LINKED_PR_FILTERS,
   LANGUAGE_ALIASES,
+  TOPIC_ALIASES,
 } from "@/features/issues/data/search-options";
 import { rankIssues } from "@/features/issues/lib/ranking";
 import type {
   GitHubIssue,
   GitHubRepo,
+  GitHubRepoSearchResponse,
   GitHubSearchResponse,
   GitHubTimelineEvent,
   Issue,
@@ -18,6 +20,8 @@ import type {
 
 const PAGE_SIZE = 24;
 const CANDIDATE_PAGE_COUNT = 5;
+const REPO_SEARCH_PAGE_SIZE = 20;
+const REPO_ISSUE_BATCH_SIZE = 10;
 
 function normalize(value: string | null) {
   return (value ?? "").trim().toLowerCase();
@@ -36,6 +40,38 @@ function buildTechQualifier(tech: string) {
   }
 
   return quoteSearchValue(tech.trim());
+}
+
+function buildRepoTopicQuery(tech: string) {
+  const normalized = normalize(tech);
+  const topicAlias = TOPIC_ALIASES[normalized];
+  const language = LANGUAGE_ALIASES[normalized];
+
+  if (language && !topicAlias) {
+    return null;
+  }
+
+  const topic = topicAlias?.topic ?? normalized.replaceAll(/\s+/g, "-");
+  const queryParts = [
+    `topic:${quoteSearchValue(topic)}`,
+    "archived:false",
+  ];
+
+  if (topicAlias?.language) {
+    queryParts.push(`language:${quoteSearchValue(topicAlias.language)}`);
+  }
+
+  return queryParts.join(" ");
+}
+
+function buildRepoScopeQualifier(repoNames: string[]) {
+  const qualifiers = repoNames.map((repoName) => `repo:${repoName}`);
+
+  if (qualifiers.length === 1) {
+    return qualifiers[0];
+  }
+
+  return `(${qualifiers.join(" OR ")})`;
 }
 
 function buildLinkedPrQualifier(linkedPr: string) {
@@ -204,30 +240,90 @@ export async function searchGitHubIssues({
   const hacktoberfest = HACKTOBERFEST_FILTERS.has(rawHacktoberfest ?? "")
     ? rawHacktoberfest!
     : "any";
+  const token = process.env.GITHUB_TOKEN;
+  const repoTopicQuery = buildRepoTopicQuery(tech);
+  let matchingRepos: GitHubRepo[] = [];
   const queryParts = [
     "is:issue",
     "is:open",
     "archived:false",
-    buildTechQualifier(tech),
-    `label:${quoteSearchValue(label)}`,
   ];
   const linkedPrQualifier = buildLinkedPrQualifier(linkedPr);
+
+  if (repoTopicQuery) {
+    const repoSearchUrl = new URL("https://api.github.com/search/repositories");
+    repoSearchUrl.searchParams.set("q", repoTopicQuery);
+    repoSearchUrl.searchParams.set("sort", "updated");
+    repoSearchUrl.searchParams.set("order", "desc");
+    repoSearchUrl.searchParams.set("per_page", String(REPO_SEARCH_PAGE_SIZE));
+    repoSearchUrl.searchParams.set("page", "1");
+
+    const repoSearchResult = await githubFetch<GitHubRepoSearchResponse>(
+      repoSearchUrl.toString(),
+      token,
+      7200,
+    );
+    matchingRepos = repoSearchResult.data.items;
+  } else {
+    queryParts.push(buildTechQualifier(tech));
+  }
+
+  queryParts.push(`label:${quoteSearchValue(label)}`);
 
   if (linkedPrQualifier) {
     queryParts.push(linkedPrQualifier);
   }
 
-  const query = queryParts.join(" ");
+  const repoBatches =
+    repoTopicQuery && matchingRepos.length > 0
+      ? Array.from(
+          { length: Math.ceil(matchingRepos.length / REPO_ISSUE_BATCH_SIZE) },
+          (_, index) =>
+            matchingRepos.slice(
+              index * REPO_ISSUE_BATCH_SIZE,
+              (index + 1) * REPO_ISSUE_BATCH_SIZE,
+            ),
+        )
+      : [];
 
-  const token = process.env.GITHUB_TOKEN;
-  const searchUrls = Array.from({ length: CANDIDATE_PAGE_COUNT }, (_, index) => {
-    const url = new URL("https://api.github.com/search/issues");
-    url.searchParams.set("q", query);
-    url.searchParams.set("sort", sort);
-    url.searchParams.set("order", "desc");
-    url.searchParams.set("per_page", String(PAGE_SIZE));
-    url.searchParams.set("page", String(index + 1));
-    return url.toString();
+  if (repoTopicQuery && repoBatches.length === 0) {
+    return {
+      query: repoTopicQuery,
+      totalCount: 0,
+      candidateCount: 0,
+      rateLimitRemaining: null,
+      tokenConfigured: Boolean(token),
+      issues: [],
+      page,
+    };
+  }
+
+  const issueQueries =
+    repoBatches.length > 0
+      ? repoBatches.slice(0, CANDIDATE_PAGE_COUNT).map((repoBatch) =>
+          [
+            ...queryParts,
+            buildRepoScopeQualifier(repoBatch.map((repo) => repo.full_name)),
+          ].join(" "),
+        )
+      : [queryParts.join(" ")];
+  const query = issueQueries.join(" | ");
+
+  const searchUrls = issueQueries.flatMap((issueQuery) => {
+    const pageNumbers =
+      repoBatches.length > 0
+        ? [1]
+        : Array.from({ length: CANDIDATE_PAGE_COUNT }, (_, index) => index + 1);
+
+    return pageNumbers.map((pageNumber) => {
+      const url = new URL("https://api.github.com/search/issues");
+      url.searchParams.set("q", issueQuery);
+      url.searchParams.set("sort", sort);
+      url.searchParams.set("order", "desc");
+      url.searchParams.set("per_page", String(PAGE_SIZE));
+      url.searchParams.set("page", String(pageNumber));
+      return url.toString();
+    });
   });
   const searchResults = await Promise.all(
     searchUrls.map((url) => githubFetch<GitHubSearchResponse>(url, token, 180)),
@@ -235,14 +331,16 @@ export async function searchGitHubIssues({
   const totalCount = searchResults[0]?.data.total_count ?? 0;
   const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
   const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
+  const repoEntriesFromSearch = matchingRepos.map((repo) => [repo.full_name, repo] as const);
+  const repoEntriesFromSearchMap = new Map(repoEntriesFromSearch);
   const shouldFetchRepos = Boolean(token) || hacktoberfest === "only";
   const repoNames = shouldFetchRepos
     ? Array.from(
         new Set(candidateIssues.map((item) => getRepoFullName(item.repository_url))),
-      )
+      ).filter((fullName) => !repoEntriesFromSearchMap.has(fullName))
     : [];
 
-  const repoEntries = await Promise.all(
+  const fetchedRepoEntries = await Promise.all(
     repoNames.map(async (fullName) => {
       try {
         const repo = await githubFetch<GitHubRepo>(
@@ -256,6 +354,7 @@ export async function searchGitHubIssues({
       }
     }),
   );
+  const repoEntries = [...repoEntriesFromSearch, ...fetchedRepoEntries];
 
   const commentEntries = await Promise.all(
     candidateIssues.map(async (issue) => {

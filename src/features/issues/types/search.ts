@@ -58,6 +58,11 @@ export type GitHubSearchResponse = {
   items: GitHubIssue[];
 };
 
+export type GitHubRepoSearchResponse = {
+  total_count: number;
+  items: GitHubRepo[];
+};
+
 export type GitHubRepo = {
   full_name: string;
   html_url: string;
