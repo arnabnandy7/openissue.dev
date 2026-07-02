@@ -186,7 +186,7 @@ export function IssueFinder() {
 
             <form
               onSubmit={searchIssues}
-              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_1fr_1.1fr_1.1fr_auto]"
+              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-3"
             >
               <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -253,7 +253,7 @@ export function IssueFinder() {
 
               <Button
                 type="submit"
-                className="h-11 w-full gap-2 sm:col-span-2 xl:col-span-1"
+                className="h-11 w-full gap-2 sm:col-span-2 lg:col-span-1"
                 disabled={isLoading || cooldown}
               >
                 <Search className="h-4 w-4" />
@@ -276,7 +276,7 @@ export function IssueFinder() {
               <Metric label="Linked PR" value={selectedLinkedPr.label.replace("Linked PR: ", "")} />
               <Metric label="Hacktoberfest" value={selectedHacktoberfest.label} />
               <Metric label="Ranked" value={data ? compactNumber(data.candidateCount) : "-"} />
-              <Metric label="Matches" value={data ? compactNumber(data.totalCount) : "-"} />
+              <Metric label="Raw GitHub matches" value={data ? compactNumber(data.totalCount) : "-"} />
               <Metric
                 label="GitHub token"
                 value={data?.tokenConfigured ? "configured" : "not set"}
@@ -351,7 +351,9 @@ export function IssueFinder() {
                 <Badge variant="secondary">
                   {compactNumber(data.candidateCount)} ranked candidates
                 </Badge>
-                <Badge variant="outline">{compactNumber(data.totalCount)} GitHub matches</Badge>
+                <Badge variant="outline">
+                  {compactNumber(data.totalCount)} raw GitHub matches
+                </Badge>
               </div>
             </div>
           ) : (
