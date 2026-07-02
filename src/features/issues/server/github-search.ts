@@ -274,6 +274,12 @@ export async function searchGitHubIssues({
     queryParts.push(linkedPrQualifier);
   }
 
+  const displayQuery = repoTopicQuery
+    ? [repoTopicQuery, `label:${quoteSearchValue(label)}`, linkedPrQualifier]
+        .filter(Boolean)
+        .join(" ")
+    : queryParts.join(" ");
+
   const repoBatches =
     repoTopicQuery && matchingRepos.length > 0
       ? Array.from(
@@ -288,7 +294,7 @@ export async function searchGitHubIssues({
 
   if (repoTopicQuery && repoBatches.length === 0) {
     return {
-      query: repoTopicQuery,
+      query: displayQuery,
       totalCount: 0,
       candidateCount: 0,
       rateLimitRemaining: null,
@@ -307,7 +313,6 @@ export async function searchGitHubIssues({
           ].join(" "),
         )
       : [queryParts.join(" ")];
-  const query = issueQueries.join(" | ");
 
   const searchUrls = issueQueries.flatMap((issueQuery) => {
     const pageNumbers =
@@ -328,7 +333,10 @@ export async function searchGitHubIssues({
   const searchResults = await Promise.all(
     searchUrls.map((url) => githubFetch<GitHubSearchResponse>(url, token, 180)),
   );
-  const totalCount = searchResults[0]?.data.total_count ?? 0;
+  const totalCount =
+    repoBatches.length > 0
+      ? searchResults.reduce((count, result) => count + result.data.total_count, 0)
+      : searchResults[0]?.data.total_count ?? 0;
   const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
   const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
   const repoEntriesFromSearch = matchingRepos.map((repo) => [repo.full_name, repo] as const);
@@ -446,7 +454,7 @@ export async function searchGitHubIssues({
   }));
 
   return {
-    query,
+    query: displayQuery,
     totalCount,
     candidateCount: rankedIssues.length,
     rateLimitRemaining,

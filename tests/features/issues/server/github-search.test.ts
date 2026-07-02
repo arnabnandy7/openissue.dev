@@ -177,6 +177,9 @@ describe("searchGitHubIssues", () => {
       "is:issue is:open archived:false label:\"help wanted\" repo:spring-projects/spring-boot",
     );
     expect(issueQuery).not.toContain("Spring Boot");
+    expect(result.query).toBe(
+      'topic:spring-boot archived:false language:Java label:"help wanted"',
+    );
     expect(result.issues[0]).toMatchObject({
       repo: "spring-projects/spring-boot",
       stars: 82000,
