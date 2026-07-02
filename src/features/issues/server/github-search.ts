@@ -1,6 +1,7 @@
 import {
   GITHUB_LABELS,
   GITHUB_SORTS,
+  HACKTOBERFEST_FILTERS,
   LINKED_PR_FILTERS,
   LANGUAGE_ALIASES,
 } from "@/features/issues/data/search-options";
@@ -102,7 +103,28 @@ function countLinkedPullRequests(events: GitHubTimelineEvent[]) {
   return linkedPullRequests.size;
 }
 
-function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueStatus) {
+function getHacktoberfestSource(issue: GitHubIssue, repo?: GitHubRepo) {
+  const hasRepoTopic = repo?.topics?.some(
+    (topic) => normalize(topic) === "hacktoberfest",
+  );
+
+  if (hasRepoTopic) {
+    return "repo-topic" as const;
+  }
+
+  const hasIssueLabel = issue.labels.some((label) =>
+    normalize(label.name).includes("hacktoberfest"),
+  );
+
+  return hasIssueLabel ? ("issue-label" as const) : null;
+}
+
+function scoreIssue(
+  issue: GitHubIssue,
+  repo?: GitHubRepo,
+  helpStatus?: IssueStatus,
+  hacktoberfestReady = false,
+) {
   const ageDays =
     (Date.now() - new Date(issue.updated_at).getTime()) / (1000 * 60 * 60 * 24);
   const recencyScore = Math.max(0, 35 - ageDays * 1.5);
@@ -110,8 +132,16 @@ function scoreIssue(issue: GitHubIssue, repo?: GitHubRepo, helpStatus?: IssueSta
   const labelScore = Math.min(20, issue.labels.length * 4);
   const commentScore = Math.max(0, 15 - issue.comments * 1.5);
   const assignmentScore = issue.assignee || issue.assignees?.length ? 0 : 5;
+  const hacktoberfestScore = hacktoberfestReady ? 8 : 0;
 
-  let score = Math.round(recencyScore + starScore + labelScore + commentScore + assignmentScore);
+  let score = Math.round(
+    recencyScore +
+      starScore +
+      labelScore +
+      commentScore +
+      assignmentScore +
+      hacktoberfestScore,
+  );
 
   if (helpStatus === "claimed") {
     score = Math.max(0, score - 25);
@@ -158,17 +188,22 @@ export async function searchGitHubIssues({
   label: rawLabel,
   sort: rawSort,
   linkedPr: rawLinkedPr,
+  hacktoberfest: rawHacktoberfest,
   page = 1,
 }: {
   tech: string;
   label: string | null;
   sort: string | null;
   linkedPr: string | null;
+  hacktoberfest?: string | null;
   page?: number;
 }): Promise<SearchResponse> {
   const label = GITHUB_LABELS[normalize(rawLabel)] ?? "help wanted";
   const sort = GITHUB_SORTS.has(rawSort ?? "") ? rawSort! : "updated";
   const linkedPr = LINKED_PR_FILTERS.has(rawLinkedPr ?? "") ? rawLinkedPr! : "any";
+  const hacktoberfest = HACKTOBERFEST_FILTERS.has(rawHacktoberfest ?? "")
+    ? rawHacktoberfest!
+    : "any";
   const queryParts = [
     "is:issue",
     "is:open",
@@ -200,7 +235,8 @@ export async function searchGitHubIssues({
   const totalCount = searchResults[0]?.data.total_count ?? 0;
   const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
   const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
-  const repoNames = token
+  const shouldFetchRepos = Boolean(token) || hacktoberfest === "only";
+  const repoNames = shouldFetchRepos
     ? Array.from(
         new Set(candidateIssues.map((item) => getRepoFullName(item.repository_url))),
       )
@@ -273,6 +309,7 @@ export async function searchGitHubIssues({
       if (assigned) {
         helpStatus = "claimed";
       }
+      const hacktoberfestSource = getHacktoberfestSource(issue, repo);
 
       return {
         id: issue.html_url,
@@ -287,10 +324,12 @@ export async function searchGitHubIssues({
         createdAt: issue.created_at,
         assigned,
         linkedPrCount: null,
+        hacktoberfest: Boolean(hacktoberfestSource),
+        hacktoberfestSource,
         helpStatus,
-        qualityScore: scoreIssue(issue, repo, helpStatus),
+        qualityScore: scoreIssue(issue, repo, helpStatus, Boolean(hacktoberfestSource)),
       };
-    }),
+    }).filter((issue) => hacktoberfest !== "only" || issue.hacktoberfest),
   );
   const start = (page - 1) * PAGE_SIZE;
   const selectedIssues = rankedIssues.slice(start, start + PAGE_SIZE);

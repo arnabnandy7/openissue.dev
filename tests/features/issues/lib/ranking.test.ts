@@ -16,6 +16,8 @@ function issue(overrides: Partial<Issue>): Issue {
     createdAt: "2026-06-19T10:00:00.000Z",
     assigned: false,
     linkedPrCount: 0,
+    hacktoberfest: false,
+    hacktoberfestSource: null,
     qualityScore: 50,
     helpStatus: "open",
     ...overrides,

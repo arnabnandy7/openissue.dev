@@ -18,6 +18,8 @@ export type Issue = {
   createdAt: string;
   assigned: boolean;
   linkedPrCount: number | null;
+  hacktoberfest: boolean;
+  hacktoberfestSource: "repo-topic" | "issue-label" | null;
   qualityScore: number;
   helpStatus?: IssueStatus;
 };
@@ -61,6 +63,7 @@ export type GitHubRepo = {
   html_url: string;
   stargazers_count: number;
   archived: boolean;
+  topics?: string[];
 };
 
 export type GitHubTimelineEvent = {

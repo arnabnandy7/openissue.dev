@@ -24,6 +24,7 @@ import { IssueCard } from "@/features/issues/components/issue-card";
 import { LoadingResults } from "@/features/issues/components/loading-results";
 import { Metric } from "@/features/issues/components/metric";
 import {
+  HACKTOBERFEST_OPTIONS,
   LABEL_OPTIONS,
   LINKED_PR_OPTIONS,
   SORT_OPTIONS,
@@ -38,6 +39,7 @@ export function IssueFinder() {
   const [label, setLabel] = useState("help-wanted");
   const [sort, setSort] = useState("updated");
   const [linkedPr, setLinkedPr] = useState("any");
+  const [hacktoberfest, setHacktoberfest] = useState("any");
   const [data, setData] = useState<SearchResponse | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [page, setPage] = useState(1);
@@ -58,6 +60,12 @@ export function IssueFinder() {
   const selectedSort = useMemo(
     () => SORT_OPTIONS.find((item) => item.value === sort) ?? SORT_OPTIONS[0],
     [sort],
+  );
+  const selectedHacktoberfest = useMemo(
+    () =>
+      HACKTOBERFEST_OPTIONS.find((item) => item.value === hacktoberfest) ??
+      HACKTOBERFEST_OPTIONS[0],
+    [hacktoberfest],
   );
 
   const hasMore = useMemo(() => {
@@ -84,6 +92,7 @@ export function IssueFinder() {
       label,
       sort,
       linkedPr,
+      hacktoberfest,
     });
 
     try {
@@ -122,6 +131,7 @@ export function IssueFinder() {
       label,
       sort,
       linkedPr,
+      hacktoberfest,
       page: String(nextPage),
     });
 
@@ -176,7 +186,7 @@ export function IssueFinder() {
 
             <form
               onSubmit={searchIssues}
-              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_1fr_1.1fr_auto]"
+              className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_1fr_1.1fr_1.1fr_auto]"
             >
               <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -228,6 +238,19 @@ export function IssueFinder() {
                 </SelectContent>
               </Select>
 
+              <Select value={hacktoberfest} onValueChange={setHacktoberfest}>
+                <SelectTrigger className="h-11 w-full" size="lg" aria-label="Hacktoberfest filter">
+                  <SelectValue>{selectedHacktoberfest.label}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {HACKTOBERFEST_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Button
                 type="submit"
                 className="h-11 w-full gap-2 sm:col-span-2 xl:col-span-1"
@@ -251,6 +274,7 @@ export function IssueFinder() {
               <Metric label="Label" value={selectedLabel.label} />
               <Metric label="Sort" value={sort === "created" ? "newest" : sort} />
               <Metric label="Linked PR" value={selectedLinkedPr.label.replace("Linked PR: ", "")} />
+              <Metric label="Hacktoberfest" value={selectedHacktoberfest.label} />
               <Metric label="Ranked" value={data ? compactNumber(data.candidateCount) : "-"} />
               <Metric label="Matches" value={data ? compactNumber(data.totalCount) : "-"} />
               <Metric

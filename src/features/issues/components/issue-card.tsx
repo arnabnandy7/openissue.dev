@@ -25,6 +25,13 @@ export function IssueCard({ issue }: { issue: Issue }) {
             {issue.repo}
           </a>
           <div className="flex flex-wrap items-center gap-2">
+            {issue.hacktoberfest ? (
+              <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-400">
+                {issue.hacktoberfestSource === "repo-topic"
+                  ? "Hacktoberfest repo"
+                  : "Hacktoberfest label"}
+              </Badge>
+            ) : null}
             {issue.qualityScore >= 70 ? (
               <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
                 {issue.qualityScore} quality

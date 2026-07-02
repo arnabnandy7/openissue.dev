@@ -1,10 +1,11 @@
-import { Bug, Code2, FileText, Sparkles, Tags, Users } from "lucide-react";
+import { Bug, CalendarDays, Code2, FileText, Sparkles, Tags, Users } from "lucide-react";
 
 export const LABEL_OPTIONS = [
   { value: "help-wanted", label: "help wanted", icon: Tags },
   { value: "good-first-issue", label: "good first issue", icon: Sparkles },
   { value: "up-for-grabs", label: "up-for-grabs", icon: Users },
   { value: "first-timers-only", label: "first-timers-only", icon: Code2 },
+  { value: "hacktoberfest", label: "hacktoberfest", icon: CalendarDays },
   { value: "bug", label: "bug", icon: Bug },
   { value: "documentation", label: "documentation", icon: FileText },
 ];
@@ -24,6 +25,7 @@ export const GITHUB_LABELS: Record<string, string> = {
   "good first issue": "good first issue",
   "up-for-grabs": "up-for-grabs",
   "first-timers-only": "first-timers-only",
+  hacktoberfest: "hacktoberfest",
   bug: "bug",
   documentation: "documentation",
 };
@@ -68,4 +70,13 @@ export const LINKED_PR_OPTIONS = [
 
 export const LINKED_PR_FILTERS = new Set(
   LINKED_PR_OPTIONS.map((option) => option.value),
+);
+
+export const HACKTOBERFEST_OPTIONS = [
+  { value: "any", label: "All issues" },
+  { value: "only", label: "Hacktoberfest ready" },
+];
+
+export const HACKTOBERFEST_FILTERS = new Set(
+  HACKTOBERFEST_OPTIONS.map((option) => option.value),
 );
