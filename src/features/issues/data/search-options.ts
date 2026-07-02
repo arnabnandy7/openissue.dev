@@ -31,7 +31,6 @@ export const GITHUB_LABELS: Record<string, string> = {
 };
 
 export const LANGUAGE_ALIASES: Record<string, string> = {
-  angular: "TypeScript",
   csharp: "C#",
   "c#": "C#",
   cpp: "C++",
@@ -40,18 +39,25 @@ export const LANGUAGE_ALIASES: Record<string, string> = {
   golang: "Go",
   java: "Java",
   javascript: "JavaScript",
-  next: "TypeScript",
-  "next.js": "TypeScript",
-  nextjs: "TypeScript",
-  node: "JavaScript",
-  "node.js": "JavaScript",
-  nodejs: "JavaScript",
   python: "Python",
-  react: "TypeScript",
   ruby: "Ruby",
   rust: "Rust",
   typescript: "TypeScript",
-  vue: "TypeScript",
+};
+
+export const TOPIC_ALIASES: Record<string, { topic: string; language?: string }> = {
+  angular: { topic: "angular", language: "TypeScript" },
+  kubernetes: { topic: "kubernetes", language: "Go" },
+  next: { topic: "nextjs", language: "TypeScript" },
+  "next.js": { topic: "nextjs", language: "TypeScript" },
+  nextjs: { topic: "nextjs", language: "TypeScript" },
+  node: { topic: "nodejs", language: "JavaScript" },
+  "node.js": { topic: "nodejs", language: "JavaScript" },
+  nodejs: { topic: "nodejs", language: "JavaScript" },
+  react: { topic: "react", language: "TypeScript" },
+  "spring boot": { topic: "spring-boot", language: "Java" },
+  springboot: { topic: "spring-boot", language: "Java" },
+  vue: { topic: "vue", language: "TypeScript" },
 };
 
 export const SORT_OPTIONS = [
