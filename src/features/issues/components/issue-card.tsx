@@ -10,6 +10,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -255,12 +261,14 @@ export function IssueCard({
   matchSignals = [],
   onOpen,
   onSaveChange,
+  onDismiss,
 }: Readonly<{
   issue: Issue;
   isSaved?: boolean;
   matchSignals?: string[];
   onOpen?: (issue: Issue) => void;
   onSaveChange?: (issue: Issue, saved: boolean) => void;
+  onDismiss?: (issue: Issue, reason: string) => void;
 }>) {
   return (
     <Card>
@@ -344,6 +352,33 @@ export function IssueCard({
                 <Bookmark className={isSaved ? "h-4 w-4 fill-current" : "h-4 w-4"} />
                 {isSaved ? "Saved" : "Save"}
               </Button>
+            ) : null}
+            {onDismiss ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Dismiss
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onDismiss(issue, "Not interested")}>
+                    Not interested
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDismiss(issue, "Wrong technology")}>
+                    Wrong technology
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDismiss(issue, "Too difficult")}>
+                    Too difficult
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDismiss(issue, "Already claimed")}>
+                    Already claimed
+                  </DropdownMenuItem>
+                  <Separator className="my-1" />
+                  <DropdownMenuItem onClick={() => onDismiss(issue, "Hide this repository")} className="text-red-600 focus:text-red-600">
+                    Hide this repository
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
             <Button asChild size="sm" className="gap-2">
               <a

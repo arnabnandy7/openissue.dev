@@ -9,6 +9,8 @@ const {
   isSearchRateLimited,
   opportunity,
   savedSearch,
+  issueFeedback,
+  hiddenRepository,
 } = vi.hoisted(() => ({
   buildPersonalizedRecommendations: vi.fn(),
   desc: vi.fn(),
@@ -25,12 +27,20 @@ const {
     createdAt: "savedSearch.createdAt",
     userId: "savedSearch.userId",
   },
+  issueFeedback: {
+    issueUrl: "issueFeedback.issueUrl",
+    userId: "issueFeedback.userId",
+  },
+  hiddenRepository: {
+    repositoryFullName: "hiddenRepository.repositoryFullName",
+    userId: "hiddenRepository.userId",
+  }
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("drizzle-orm", () => ({ desc, eq }));
 vi.mock("@/lib/auth", () => ({ auth: { api: { getSession } } }));
-vi.mock("@/lib/auth-schema", () => ({ opportunity, savedSearch }));
+vi.mock("@/lib/auth-schema", () => ({ opportunity, savedSearch, issueFeedback, hiddenRepository }));
 vi.mock("@/lib/db", () => ({ getDatabase }));
 vi.mock("@/features/issues/server/personalized-recommendations", () => ({
   buildPersonalizedRecommendations,
@@ -140,6 +150,7 @@ describe("recommendations API", () => {
     expect(buildPersonalizedRecommendations).toHaveBeenCalledWith(
       [expect.objectContaining({ id: "search-2", createdAt: "2026-08-29T00:00:00.000Z" })],
       opportunities,
+      expect.any(Object),
     );
   });
 
@@ -151,6 +162,7 @@ describe("recommendations API", () => {
     expect(buildPersonalizedRecommendations).toHaveBeenCalledWith(
       [expect.objectContaining({ id: "search-1" })],
       opportunities,
+      expect.any(Object),
     );
   });
 
@@ -168,7 +180,7 @@ describe("recommendations API", () => {
     const response = await GET(new Request("http://localhost/api/recommendations"));
 
     expect(response.status).toBe(200);
-    expect(buildPersonalizedRecommendations).toHaveBeenCalledWith([], opportunities);
+    expect(buildPersonalizedRecommendations).toHaveBeenCalledWith([], opportunities, expect.any(Object));
   });
 
   it("converts GitHub failures to a gateway error", async () => {

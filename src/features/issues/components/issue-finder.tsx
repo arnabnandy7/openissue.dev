@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/select";
 import { IssueCard } from "@/features/issues/components/issue-card";
 import { LoadingResults } from "@/features/issues/components/loading-results";
+import { HiddenRepositories } from "@/features/issues/components/hidden-repositories";
 import { Metric } from "@/features/issues/components/metric";
 import { RepositoryDigestCard } from "@/features/issues/components/repository-digest-card";
 import { AdminEmailCard } from "@/features/issues/components/admin-email-card";
@@ -344,7 +345,7 @@ function EnrichmentNotice({ data }: Readonly<{ data: SearchResponse | null }>) {
   );
 }
 
-type ContentTab = "results" | "recommendations" | "contributions";
+type ContentTab = "results" | "recommendations" | "contributions" | "hidden-repositories";
 
 function RankedIssuesPanel({
   error,
@@ -474,6 +475,30 @@ function RecommendationsPanel({
     setPreferredSearchId(searchId);
   }
 
+  async function handleDismiss(issue: Issue, reason: string) {
+    if (!data) return;
+
+    setData({
+      ...data,
+      recommendations: data.recommendations.filter((r) => r.issue.id !== issue.id),
+    });
+
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repositoryFullName: issue.repo,
+          issueNumber: parseInt(issue.url.split("/").pop() ?? "0"),
+          issueUrl: issue.url,
+          reason,
+        }),
+      });
+    } catch (e) {
+      console.error("Failed to save feedback", e);
+    }
+  }
+
   return (
     <div
       id="recommendations-panel"
@@ -550,6 +575,7 @@ function RecommendationsPanel({
           isSaved={savedOpportunityUrls.has(recommendation.issue.url)}
           onOpen={onIssueOpen}
           onSaveChange={onIssueSaveChange}
+          onDismiss={handleDismiss}
         />
       )) : null}
     </div>
@@ -583,6 +609,16 @@ function IssueContentTabs({
         aria-label="Contribution history"
       >
         <ContributionHistory key={contributionRevision} />
+      </div>
+    );
+  } else if (activeTab === "hidden-repositories" && authenticated) {
+    activePanel = (
+      <div
+        id="hidden-repositories-panel"
+        role="tabpanel"
+        aria-label="Hidden repositories"
+      >
+        <HiddenRepositories />
       </div>
     );
   }
@@ -627,6 +663,19 @@ function IssueContentTabs({
             onClick={() => onTabChange("contributions")}
           >
             Contribution history
+          </Button>
+        ) : null}
+        {authenticated ? (
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "hidden-repositories"}
+            aria-controls="hidden-repositories-panel"
+            variant={activeTab === "hidden-repositories" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onTabChange("hidden-repositories")}
+          >
+            Hidden repositories
           </Button>
         ) : null}
       </div>

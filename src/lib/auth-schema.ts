@@ -250,6 +250,8 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   savedSearches: many(savedSearch),
   opportunities: many(opportunity),
+  issueFeedback: many(issueFeedback),
+  hiddenRepositories: many(hiddenRepository),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -276,6 +278,66 @@ export const savedSearchRelations = relations(savedSearch, ({ one }) => ({
 export const opportunityRelations = relations(opportunity, ({ one }) => ({
   user: one(user, {
     fields: [opportunity.userId],
+    references: [user.id],
+  }),
+}));
+
+export const issueFeedback = sqliteTable(
+  "issue_feedback",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    repositoryFullName: text("repository_full_name").notNull(),
+    issueNumber: integer("issue_number").notNull(),
+    issueUrl: text("issue_url").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("issue_feedback_user_repository_issue_uidx").on(
+      table.userId,
+      table.repositoryFullName,
+      table.issueNumber,
+    ),
+    index("issue_feedback_user_id_idx").on(table.userId),
+  ],
+);
+
+export const hiddenRepository = sqliteTable(
+  "hidden_repository",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    repositoryFullName: text("repository_full_name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("hidden_repository_user_repo_uidx").on(
+      table.userId,
+      table.repositoryFullName,
+    ),
+    index("hidden_repository_user_id_idx").on(table.userId),
+  ],
+);
+
+export const issueFeedbackRelations = relations(issueFeedback, ({ one }) => ({
+  user: one(user, {
+    fields: [issueFeedback.userId],
+    references: [user.id],
+  }),
+}));
+
+export const hiddenRepositoryRelations = relations(hiddenRepository, ({ one }) => ({
+  user: one(user, {
+    fields: [hiddenRepository.userId],
     references: [user.id],
   }),
 }));

@@ -7,6 +7,7 @@ import {
   render as testingLibraryRender,
   screen,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IssueCard } from "@/features/issues/components/issue-card";
@@ -123,6 +124,31 @@ describe("issue presentation", () => {
     expect(screen.getByText("Health unknown")).toBeTruthy();
   });
 
+  it("renders classification and responsiveness signals", () => {
+    render(
+      <IssueCard
+        issue={issue({
+          repositoryResponsiveness: {
+            status: "responsive",
+            sampleDays: 90,
+            sampleSize: 12,
+            signals: ["Median response time: 2 days"],
+          },
+          classification: {
+            experience: ["beginner"],
+            contributionTypes: ["bugfix"],
+            smallScope: true,
+            signals: ["Beginner friendly", "Small scope"],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("responsive maintainers")).toBeTruthy();
+    expect(screen.getByText("Beginner friendly")).toBeTruthy();
+    expect(screen.getByText("Small scope")).toBeTruthy();
+  });
+
   it("does not imply unavailable enrichment was measured", () => {
     render(
       <IssueCard
@@ -167,5 +193,17 @@ describe("issue presentation", () => {
     fireEvent.click(screen.getByRole("link", { name: "Open issue" }));
     expect(onSaveChange).toHaveBeenCalledWith(selectedIssue, true);
     expect(onOpen).toHaveBeenCalledWith(selectedIssue);
+  });
+
+  it("reports recommendation dismissal feedback", async () => {
+    const onDismiss = vi.fn();
+    const selectedIssue = issue();
+    const user = userEvent.setup();
+    render(<IssueCard issue={selectedIssue} onDismiss={onDismiss} />);
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    await user.click(screen.getByRole("menuitem", { name: "Not interested" }));
+
+    expect(onDismiss).toHaveBeenCalledWith(selectedIssue, "Not interested");
   });
 });

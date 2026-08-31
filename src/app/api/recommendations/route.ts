@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { opportunity, savedSearch } from "@/lib/auth-schema";
+import { opportunity, savedSearch, issueFeedback, hiddenRepository } from "@/lib/auth-schema";
 import { getDatabase } from "@/lib/db";
 import { buildPersonalizedRecommendations } from "@/features/issues/server/personalized-recommendations";
 import { isSearchRateLimited } from "@/features/issues/server/search-rate-limit";
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const selectedSearchId = searchIds[0];
   const database = getDatabase();
 
-  const [searches, opportunities] = await Promise.all([
+  const [searches, opportunities, feedbacks, hiddenRepos] = await Promise.all([
     database
       .select()
       .from(savedSearch)
@@ -36,6 +36,18 @@ export async function GET(request: Request) {
       })
       .from(opportunity)
       .where(eq(opportunity.userId, session.user.id)),
+    database
+      .select({
+        issueUrl: issueFeedback.issueUrl,
+      })
+      .from(issueFeedback)
+      .where(eq(issueFeedback.userId, session.user.id)),
+    database
+      .select({
+        repositoryFullName: hiddenRepository.repositoryFullName,
+      })
+      .from(hiddenRepository)
+      .where(eq(hiddenRepository.userId, session.user.id)),
   ]);
 
   try {
@@ -76,6 +88,10 @@ export async function GET(request: Request) {
           ]
         : [],
       opportunities,
+      {
+        dismissedIssueUrls: new Set(feedbacks.map((f) => f.issueUrl)),
+        hiddenRepositories: new Set(hiddenRepos.map((r) => r.repositoryFullName.toLowerCase())),
+      }
     );
 
     return Response.json(result);

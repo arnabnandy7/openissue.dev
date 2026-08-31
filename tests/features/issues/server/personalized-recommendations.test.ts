@@ -144,6 +144,32 @@ describe("personalized recommendations", () => {
     expect(result.recommendations[0].matchSignals).toContain("Familiar repository");
   });
 
+  it("excludes dismissed issues and hidden repositories", async () => {
+    const dismissedIssue = issue(1);
+    mockedSearch.mockResolvedValue({
+      query: "query",
+      totalCount: 3,
+      candidateCount: 3,
+      rateLimitRemaining: "100",
+      tokenConfigured: true,
+      issues: [dismissedIssue, issue(2, "Acme/Hidden"), issue(3, "acme/visible")],
+      page: 1,
+    });
+
+    const result = await buildPersonalizedRecommendations(
+      [savedSearch("search", "TypeScript", "help-wanted", "2026-08-29T00:00:00.000Z")],
+      [],
+      {
+        dismissedIssueUrls: new Set([dismissedIssue.url]),
+        hiddenRepositories: new Set(["acme/hidden"]),
+      },
+    );
+
+    expect(result.recommendations.map((item) => item.issue.id)).toEqual([
+      "issue-3",
+    ]);
+  });
+
   it("uses recency to break equal recommendation scores", async () => {
     const olderIssue = issue(1);
     olderIssue.updatedAt = "2026-08-28T00:00:00.000Z";
