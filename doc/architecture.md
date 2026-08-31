@@ -152,9 +152,19 @@ URL, title, and interaction timestamps. The unique user/repository/issue key
 prevents repeated opens from creating duplicate rows. Contribution history is
 still fetched live and is never copied into the database.
 
+Saved opportunities also carry a private contribution workflow state: Saved,
+Asked maintainer, Working, PR opened, Merged, or Abandoned. The authenticated
+workflow board groups or filters those records by state and lets the owner store
+an optional private note and follow-up date. A configurable age threshold marks
+records whose workflow has not changed recently. Workflow updates use the same
+user-scoped opportunity route and never appear for guests.
+
 An authored issue is annotated when its canonical URL matches a saved or opened
 opportunity. Pull requests are not matched by number alone because GitHub issue
-and pull-request numbers can collide without representing related work.
+and pull-request numbers can collide without representing related work. Users
+can explicitly record PR-opened and merged states. Automatic PR reconciliation
+must only use an explicit GitHub closing-issue relationship; equal repository and
+item numbers are not sufficient evidence.
 
 ## Personalized recommendations
 
@@ -173,7 +183,160 @@ The database contains Better Auth's `user`, `session`, `account`, and
 `verification` tables plus application-owned saved searches, opportunities,
 digest preferences, and repository-alert records. Opportunities reference
 `user.id` with cascading deletion and store only compact issue identifiers and
-interaction timestamps; GitHub contribution payloads are not persisted.
+interaction timestamps plus private workflow metadata; GitHub contribution
+payloads are not persisted. Opportunity queries and workflow mutations are
+always scoped to the authenticated user ID.
+
+```mermaid
+erDiagram
+  USER ||--o{ SESSION : has
+  USER ||--o{ ACCOUNT : connects
+  USER ||--o| ADMIN : authorizes
+  USER ||--o{ SAVED_SEARCH : owns
+  USER ||--o{ OPPORTUNITY : tracks
+  USER ||--o| REPOSITORY_DIGEST_TEMPLATE : configures
+  USER ||--o{ ISSUE_FEEDBACK : submits
+  USER ||--o{ HIDDEN_REPOSITORY : hides
+  REPOSITORY_DIGEST_TEMPLATE ||--o{ REPOSITORY_DIGEST_REPOSITORY : contains
+
+  USER {
+    text id PK
+    text email UK
+    text name
+    text alert_email
+    boolean weekly_digest_enabled
+    timestamp weekly_digest_last_sent_at
+  }
+
+  SESSION {
+    text id PK
+    text user_id FK
+    text token UK
+    timestamp expires_at
+  }
+
+  ACCOUNT {
+    text id PK
+    text user_id FK
+    text issuer
+    text account_id
+    text provider_id
+    text access_token
+  }
+
+  VERIFICATION {
+    text id PK
+    text identifier
+    text value
+    timestamp expires_at
+  }
+
+  ADMIN {
+    text user_id PK, FK
+    timestamp created_at
+  }
+
+  SAVED_SEARCH {
+    text id PK
+    text user_id FK
+    text name
+    text tech
+    text label
+    text sort
+    text linked_pr
+    text hacktoberfest
+    text experience
+    text contribution_type
+    text scope
+    text responsiveness
+  }
+
+  OPPORTUNITY {
+    text id PK
+    text user_id FK
+    text repository_full_name
+    integer issue_number
+    text issue_url
+    text title
+    timestamp saved_at
+    timestamp opened_at
+    text workflow_state
+    text note
+    timestamp follow_up_at
+    timestamp workflow_updated_at
+  }
+
+  DIGEST_TREND_SNAPSHOT {
+    text id PK
+    text search_key
+    timestamp week_start
+    integer issue_count
+    text top_repository
+    integer top_repository_issue_count
+  }
+
+  REPOSITORY_DIGEST_TEMPLATE {
+    text id PK
+    text user_id FK, UK
+    text name
+    boolean enabled
+    text frequency
+    timestamp last_sent_at
+  }
+
+  REPOSITORY_DIGEST_REPOSITORY {
+    text id PK
+    text template_id FK
+    text repository_full_name
+    text repository_url
+    integer position
+    text last_issue_ids
+  }
+
+  ISSUE_FEEDBACK {
+    text id PK
+    text user_id FK
+    text repository_full_name
+    integer issue_number
+    text issue_url
+    text reason
+  }
+
+  HIDDEN_REPOSITORY {
+    text id PK
+    text user_id FK
+    text repository_full_name
+  }
+```
+
+`VERIFICATION` stores short-lived Better Auth values. `DIGEST_TREND_SNAPSHOT`
+stores aggregates keyed by normalized search and week, so neither table has a
+foreign-key relationship to `USER`.
+
+Cardinality and constraint details:
+
+- `||--o{` represents one parent to zero or many children. Every child row has
+  one required, non-null parent foreign key.
+- `||--o|` represents one parent to zero or one child. `ADMIN.user_id` is both
+  its primary key and a foreign key, while
+  `REPOSITORY_DIGEST_TEMPLATE.user_id` is unique, enforcing these one-to-one
+  relationships.
+- Every depicted foreign key uses `ON DELETE CASCADE`. Deleting a user removes
+  its sessions, accounts, admin membership, saved searches, opportunities,
+  digest template, feedback, and hidden repositories. Deleting a repository
+  digest template removes its selected repository rows.
+- Composite unique constraints prevent duplicate logical records:
+  `ACCOUNT(issuer, account_id)`,
+  `OPPORTUNITY(user_id, repository_full_name, issue_number)`,
+  `DIGEST_TREND_SNAPSHOT(search_key, week_start)`,
+  `REPOSITORY_DIGEST_REPOSITORY(template_id, repository_full_name)`,
+  `ISSUE_FEEDBACK(user_id, repository_full_name, issue_number)`, and
+  `HIDDEN_REPOSITORY(user_id, repository_full_name)`.
+- `USER.email` and `SESSION.token` are individually unique. The remaining
+  non-unique indexes support user ownership, workflow-state filtering,
+  verification lookup, and repository-template ordering.
+- The current schema has no many-to-many table relationship. Repository names
+  are stored values rather than foreign keys to a repository entity.
 
 Schema definitions live in `src/lib/auth-schema.ts`; executable SQL is versioned under `db/migrations/`.
 

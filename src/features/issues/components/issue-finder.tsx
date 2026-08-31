@@ -50,6 +50,7 @@ import {
 import { IssueCard } from "@/features/issues/components/issue-card";
 import { LoadingResults } from "@/features/issues/components/loading-results";
 import { HiddenRepositories } from "@/features/issues/components/hidden-repositories";
+import { OpportunityWorkflow } from "@/features/issues/components/opportunity-workflow";
 import { Metric } from "@/features/issues/components/metric";
 import { RepositoryDigestCard } from "@/features/issues/components/repository-digest-card";
 import { AdminEmailCard } from "@/features/issues/components/admin-email-card";
@@ -345,7 +346,12 @@ function EnrichmentNotice({ data }: Readonly<{ data: SearchResponse | null }>) {
   );
 }
 
-type ContentTab = "results" | "recommendations" | "contributions" | "hidden-repositories";
+type ContentTab =
+  | "results"
+  | "recommendations"
+  | "workflow"
+  | "contributions"
+  | "hidden-repositories";
 
 function RankedIssuesPanel({
   error,
@@ -611,6 +617,16 @@ function IssueContentTabs({
         <ContributionHistory key={contributionRevision} />
       </div>
     );
+  } else if (activeTab === "workflow" && authenticated) {
+    activePanel = (
+      <div
+        id="opportunity-workflow-panel"
+        role="tabpanel"
+        aria-label="Contribution workflow"
+      >
+        <OpportunityWorkflow />
+      </div>
+    );
   } else if (activeTab === "hidden-repositories" && authenticated) {
     activePanel = (
       <div
@@ -650,6 +666,19 @@ function IssueContentTabs({
           >
             <Sparkles className="h-4 w-4" />
             Recommended for you
+          </Button>
+        ) : null}
+        {authenticated ? (
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "workflow"}
+            aria-controls="opportunity-workflow-panel"
+            variant={activeTab === "workflow" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onTabChange("workflow")}
+          >
+            Workflow
           </Button>
         ) : null}
         {authenticated ? (

@@ -31,6 +31,7 @@ const {
   useSession,
   getOpportunities,
   updateOpportunity,
+  updateOpportunityWorkflow,
   getRecommendations,
 } = vi.hoisted(() => ({
   addSavedSearch: vi.fn(),
@@ -47,6 +48,7 @@ const {
   useSession: vi.fn(),
   getOpportunities: vi.fn(),
   updateOpportunity: vi.fn(),
+  updateOpportunityWorkflow: vi.fn(),
   getRecommendations: vi.fn(),
 }));
 
@@ -73,6 +75,7 @@ vi.mock("@/features/issues/lib/digest-preference-cloud", () => ({
 vi.mock("@/features/issues/lib/opportunity-cloud", () => ({
   getOpportunities,
   updateOpportunity,
+  updateOpportunityWorkflow,
 }));
 
 vi.mock("@/features/issues/lib/recommendation-cloud", () => ({
@@ -162,6 +165,7 @@ beforeEach(() => {
   useSession.mockReset().mockReturnValue({ data: null, isPending: false });
   getOpportunities.mockReset().mockResolvedValue([]);
   updateOpportunity.mockReset().mockResolvedValue(null);
+  updateOpportunityWorkflow.mockReset();
   getRecommendations.mockReset().mockResolvedValue({
     recommendations: [],
     preferenceCount: 0,
@@ -189,6 +193,9 @@ describe("IssueFinder", () => {
       ),
     ).toBe("true");
     expect(screen.queryByText("Contribution history", { selector: "div" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Workflow" }));
+    expect(screen.getByText("Contribution workflow")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Contribution history" }));
     expect(screen.getByText("Contribution history", { selector: "div" })).toBeTruthy();
