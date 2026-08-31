@@ -50,6 +50,8 @@ Run the SQL migrations in filename order against the Turso database:
 8. `db/migrations/0008_opportunity.sql`
 9. `db/migrations/0009_experience_scope_filters.sql`
 10. `db/migrations/0010_maintainer_responsiveness.sql`
+11. `db/migrations/0011_issue_feedback.sql`
+12. `db/migrations/0012_opportunity_workflow.sql`
 
 The first migration creates Better Auth's user, session, account, and verification tables. The second creates user-owned saved searches. Migration files intentionally contain structure only—never credentials or production data.
 
@@ -73,6 +75,9 @@ The ninth adds experience, contribution-type, and scope preferences to cloud
 saved searches. Existing records default to unrestricted filters.
 The tenth adds the optional maintainer-responsiveness preference to cloud saved
 searches. Existing records default to unrestricted responsiveness.
+The eleventh stores dismissed recommendation feedback and repositories hidden
+by a user. The twelfth adds private state, note, follow-up date, and workflow
+activity fields to saved opportunities; existing opportunities begin in Saved.
 
 ## GitHub OAuth
 
@@ -95,8 +100,10 @@ After deploying, verify:
 4. A signed-in user can view their public GitHub issues and pull requests with current statuses and direct links.
 5. Saving or opening the same issue repeatedly retains one opportunity record and updates its timestamps.
 6. Matching authored issues in contribution history show saved or opened badges.
-7. Removing that search prevents it from returning after refresh.
-8. Enabling and disabling the weekly digest persists after refresh.
-9. An authorized manual request to the digest cron route sends a digest only to opted-in users with saved searches.
-10. A signed-in user with a cloud saved search can use **Send digest now** once per weekly delivery window.
-11. A signed-in user can save, reopen, revise, enable, or disable a repository-alert template containing at most five autocomplete-selected repositories and select daily, weekly, or fortnightly delivery.
+7. Workflow state, private note, and follow-up date persist after refresh and are inaccessible to another user.
+8. The workflow board filters by state and highlights items older than its selected follow-up period.
+9. Removing that search prevents it from returning after refresh.
+10. Enabling and disabling the weekly digest persists after refresh.
+11. An authorized manual request to the digest cron route sends a digest only to opted-in users with saved searches.
+12. A signed-in user with a cloud saved search can use **Send digest now** once per weekly delivery window.
+13. A signed-in user can save, reopen, revise, enable, or disable a repository-alert template containing at most five autocomplete-selected repositories and select daily, weekly, or fortnightly delivery.

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getOpportunities,
   updateOpportunity,
+  updateOpportunityWorkflow,
 } from "@/features/issues/lib/opportunity-cloud";
 import type { Issue } from "@/features/issues/types/search";
 
@@ -18,6 +19,7 @@ describe("opportunity cloud client", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(Response.json({ opportunities: [opportunity] }))
+      .mockResolvedValueOnce(Response.json({ opportunity }))
       .mockResolvedValueOnce(Response.json({ opportunity }));
 
     await expect(getOpportunities()).resolves.toEqual([opportunity]);
@@ -29,6 +31,26 @@ describe("opportunity cloud client", () => {
         body: JSON.stringify({
           action: "open",
           issue: { title: issue.title, url: issue.url },
+        }),
+      }),
+    );
+
+    await expect(
+      updateOpportunityWorkflow("opportunity-1", {
+        workflowState: "working",
+        note: "Add tests",
+        followUpDate: "2026-09-15",
+      }),
+    ).resolves.toEqual(opportunity);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/opportunities",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          id: "opportunity-1",
+          workflowState: "working",
+          note: "Add tests",
+          followUpDate: "2026-09-15",
         }),
       }),
     );

@@ -17,6 +17,7 @@
 - Adds GitHub sign-in for cloud-backed saved searches that survive cleared browser storage
 - Shows signed-in users their public GitHub issue and pull-request history
 - Links authored issues to opportunities saved or opened through OpenIssue.dev
+- Organizes saved opportunities into a private contribution workflow with notes and follow-up dates
 - Recommends explainable issue matches from signed-in users' saved technologies and labels
 - Sends optional weekly email digests based on cloud-backed saved searches
 - Supports an editable repository-alert template with up to five repositories and five recent issues from each

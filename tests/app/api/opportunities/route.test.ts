@@ -38,7 +38,7 @@ vi.mock("@/lib/db", () => ({
   getDatabase: () => ({ select, insert, update, delete: remove }),
 }));
 
-import { GET, POST } from "@/app/api/opportunities/route";
+import { GET, PATCH, POST } from "@/app/api/opportunities/route";
 
 const savedRow = {
   id: "opportunity-1",
@@ -49,6 +49,10 @@ const savedRow = {
   title: "Improve widgets",
   savedAt: new Date("2026-08-20T00:00:00Z"),
   openedAt: null,
+  workflowState: "saved",
+  note: null,
+  followUpAt: null,
+  workflowUpdatedAt: new Date("2026-08-20T00:00:00Z"),
   createdAt: new Date("2026-08-20T00:00:00Z"),
   updatedAt: new Date("2026-08-20T00:00:00Z"),
 };
@@ -80,6 +84,16 @@ describe("opportunity API", () => {
         await POST(
           new Request("http://localhost/api/opportunities", {
             method: "POST",
+            body: "{}",
+          }),
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await PATCH(
+          new Request("http://localhost/api/opportunities", {
+            method: "PATCH",
             body: "{}",
           }),
         )
@@ -138,6 +152,11 @@ describe("opportunity API", () => {
       }),
     );
     expect(onConflictDoUpdate).toHaveBeenCalledOnce();
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({ workflowUpdatedAt: expect.any(Date) }),
+      }),
+    );
   });
 
   it("rejects non-issue GitHub URLs", async () => {
@@ -247,5 +266,74 @@ describe("opportunity API", () => {
     expect(updateWhere).toHaveBeenCalledOnce();
     expect(deleteWhere).toHaveBeenCalledOnce();
     await expect(response.json()).resolves.toEqual({ opportunity: null });
+  });
+
+  it("updates user-owned workflow fields", async () => {
+    const updatedRow = {
+      ...savedRow,
+      workflowState: "working",
+      note: "Start with the parser tests.",
+      followUpAt: new Date("2026-09-15T00:00:00.000Z"),
+      workflowUpdatedAt: new Date("2026-09-01T00:00:00.000Z"),
+    };
+    limit.mockResolvedValueOnce([updatedRow]);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/opportunities", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: savedRow.id,
+          workflowState: "working",
+          note: " Start with the parser tests. ",
+          followUpDate: "2026-09-15",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowState: "working",
+        note: "Start with the parser tests.",
+        followUpAt: new Date("2026-09-15T00:00:00.000Z"),
+        workflowUpdatedAt: expect.any(Date),
+      }),
+    );
+    await expect(response.json()).resolves.toEqual({
+      opportunity: expect.objectContaining({
+        workflowState: "working",
+        note: "Start with the parser tests.",
+        followUpAt: "2026-09-15T00:00:00.000Z",
+      }),
+    });
+  });
+
+  it("rejects invalid workflow updates and missing opportunities", async () => {
+    const invalid = await PATCH(
+      new Request("http://localhost/api/opportunities", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: savedRow.id,
+          workflowState: "done",
+          note: "",
+          followUpDate: "not-a-date",
+        }),
+      }),
+    );
+    limit.mockResolvedValueOnce([]);
+    const missing = await PATCH(
+      new Request("http://localhost/api/opportunities", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: "missing",
+          workflowState: "abandoned",
+          note: "",
+          followUpDate: "",
+        }),
+      }),
+    );
+
+    expect(invalid.status).toBe(400);
+    expect(missing.status).toBe(404);
   });
 });

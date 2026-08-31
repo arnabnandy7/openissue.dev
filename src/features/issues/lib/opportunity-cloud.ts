@@ -2,6 +2,7 @@ import type { Issue } from "@/features/issues/types/search";
 import type {
   Opportunity,
   OpportunityAction,
+  OpportunityWorkflowUpdate,
 } from "@/features/issues/types/opportunity";
 
 async function jsonResponse<T>(response: Response): Promise<T> {
@@ -26,6 +27,20 @@ export async function updateOpportunity(issue: Issue, action: OpportunityAction)
         action,
         issue: { title: issue.title, url: issue.url },
       }),
+    }),
+  );
+  return payload.opportunity;
+}
+
+export async function updateOpportunityWorkflow(
+  id: string,
+  update: OpportunityWorkflowUpdate,
+) {
+  const payload = await jsonResponse<{ opportunity: Opportunity }>(
+    await fetch("/api/opportunities", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...update }),
     }),
   );
   return payload.opportunity;

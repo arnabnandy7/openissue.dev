@@ -151,6 +151,12 @@ export const opportunity = sqliteTable(
     title: text("title").notNull(),
     savedAt: integer("saved_at", { mode: "timestamp_ms" }),
     openedAt: integer("opened_at", { mode: "timestamp_ms" }),
+    workflowState: text("workflow_state").default("saved").notNull(),
+    note: text("note"),
+    followUpAt: integer("follow_up_at", { mode: "timestamp_ms" }),
+    workflowUpdatedAt: integer("workflow_updated_at", { mode: "timestamp_ms" })
+      .default(sql`0`)
+      .notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -166,6 +172,10 @@ export const opportunity = sqliteTable(
       table.issueNumber,
     ),
     index("opportunity_user_id_idx").on(table.userId),
+    index("opportunity_user_workflow_state_idx").on(
+      table.userId,
+      table.workflowState,
+    ),
   ],
 );
 
