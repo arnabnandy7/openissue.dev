@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       contributionType: searchParams.get("contributionType"),
       scope: searchParams.get("scope"),
       responsiveness: searchParams.get("responsiveness"),
+      readiness: searchParams.get("readiness"),
       page,
     });
 

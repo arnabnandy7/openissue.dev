@@ -18,12 +18,37 @@ export type RepositoryResponsiveness = {
   signals: string[];
 };
 
+export type ContributionReadinessStatus =
+  | "ready"
+  | "ask"
+  | "claimed"
+  | "poorlyDocumented"
+  | "inactive"
+  | "unknown";
+
+export type ContributionDocumentation = {
+  readme: string | null;
+  contributing: string | null;
+  license: string | null;
+  codeOfConduct: string | null;
+  issueTemplate: string | null;
+  pullRequestTemplate: string | null;
+};
+
+export type ContributionReadiness = {
+  score: number | null;
+  status: ContributionReadinessStatus;
+  signals: string[];
+  documentation: ContributionDocumentation;
+};
+
 export type EnrichmentAvailability = "complete" | "partial" | "unavailable";
 
 export type IssueEnrichment = {
   repositoryMetadata: boolean;
   discussionAnalysis: boolean;
   linkedPullRequests: boolean;
+  communityProfile?: boolean;
 };
 
 export type IssueClassification = {
@@ -37,6 +62,7 @@ export type SearchEnrichment = {
   repositoryMetadata: EnrichmentAvailability;
   discussionAnalysis: EnrichmentAvailability;
   linkedPullRequests: EnrichmentAvailability;
+  communityProfile?: EnrichmentAvailability;
 };
 
 export type Issue = {
@@ -58,6 +84,7 @@ export type Issue = {
   trendingScore?: number;
   repositoryHealth: RepositoryHealth;
   repositoryResponsiveness?: RepositoryResponsiveness;
+  contributionReadiness?: ContributionReadiness;
   enrichment?: IssueEnrichment;
   helpStatus?: IssueStatus;
   classification?: IssueClassification;

@@ -715,6 +715,85 @@ describe("repository digest GitHub queries", () => {
       },
     });
   });
+
+  it("enriches and filters issues that are ready to start", async () => {
+    const repository = {
+      full_name: "acme/widgets",
+      html_url: "https://github.com/acme/widgets",
+      stargazers_count: 500,
+      archived: false,
+      pushed_at: "2026-06-25T00:00:00.000Z",
+      open_issues_count: 10,
+      forks_count: 20,
+      has_issues: true,
+      topics: ["react"],
+    };
+    let includeContributingGuide = true;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/community/profile")) {
+        return jsonResponse({
+          health_percentage: 100,
+          files: {
+            readme: { html_url: `${repository.html_url}#readme` },
+            ...(includeContributingGuide
+              ? {
+                  contributing: {
+                    html_url: `${repository.html_url}/blob/main/CONTRIBUTING.md`,
+                  },
+                }
+              : {}),
+            issue_template: { html_url: `${repository.html_url}/issues/new/choose` },
+          },
+        });
+      }
+      if (url.includes("search/repositories")) {
+        return jsonResponse({ total_count: 1, items: [repository] });
+      }
+      return jsonResponse({ total_count: 1, items: [githubIssue()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await searchGitHubIssues({
+      tech: "React",
+      label: "good-first-issue",
+      sort: "updated",
+      linkedPr: "yes",
+      readiness: "ready",
+    });
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].contributionReadiness).toMatchObject({
+      status: "ready",
+      documentation: {
+        contributing: `${repository.html_url}/blob/main/CONTRIBUTING.md`,
+      },
+    });
+    expect(result.enrichment?.communityProfile).toBe("complete");
+    const issueSearchUrl = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .find((url) => url.includes("search/issues"));
+    expect(issueSearchUrl).toContain("-linked%3Apr");
+
+    includeContributingGuide = false;
+    const poorlyDocumentedResult = await searchGitHubIssues({
+      tech: "React",
+      label: "good-first-issue",
+      sort: "updated",
+      linkedPr: "any",
+      readiness: "ready",
+    });
+    expect(poorlyDocumentedResult.issues).toHaveLength(0);
+
+    const unresponsiveResult = await searchGitHubIssues({
+      tech: "React",
+      label: "good-first-issue",
+      sort: "updated",
+      linkedPr: "any",
+      responsiveness: "responsive",
+    });
+    expect(unresponsiveResult.issues).toHaveLength(0);
+  });
 });
 
 describe("updated issue ranges", () => {

@@ -45,6 +45,7 @@ const savedSearch = {
   sort: "updated",
   linkedPr: "any",
   hacktoberfest: "any",
+  readiness: "any",
   createdAt: "2026-08-19T00:00:00.000Z",
 };
 

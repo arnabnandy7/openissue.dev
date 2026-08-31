@@ -61,6 +61,7 @@ import {
   HACKTOBERFEST_OPTIONS,
   LABEL_OPTIONS,
   LINKED_PR_OPTIONS,
+  READINESS_OPTIONS,
   RESPONSIVENESS_OPTIONS,
   SORT_OPTIONS,
   SCOPE_OPTIONS,
@@ -92,6 +93,7 @@ type SearchFilters = {
   contributionType: string;
   scope: string;
   responsiveness: string;
+  readiness: string;
 };
 
 const DEFAULT_SEARCH_FILTERS: SearchFilters = {
@@ -104,6 +106,7 @@ const DEFAULT_SEARCH_FILTERS: SearchFilters = {
   contributionType: "any",
   scope: "any",
   responsiveness: "any",
+  readiness: "any",
 };
 
 function getSupportedValue(
@@ -146,6 +149,11 @@ function getSearchFilters(search: string): SearchFilters | null {
       RESPONSIVENESS_OPTIONS,
       "any",
     ),
+    readiness: getSupportedValue(
+      params.get("readiness"),
+      READINESS_OPTIONS,
+      "any",
+    ),
   };
 }
 
@@ -160,6 +168,7 @@ function createSearchParams(filters: SearchFilters, page?: number) {
     contributionType: filters.contributionType,
     scope: filters.scope,
     responsiveness: filters.responsiveness,
+    readiness: filters.readiness,
     ...(page ? { page: String(page) } : {}),
   });
 }
@@ -171,6 +180,14 @@ function leastAvailable(
   return ENRICHMENT_PRIORITY[first] >= ENRICHMENT_PRIORITY[second]
     ? first
     : second;
+}
+
+function leastAvailableOptional(
+  first?: EnrichmentAvailability,
+  second?: EnrichmentAvailability,
+) {
+  if (!first || !second) return first ?? second;
+  return leastAvailable(first, second);
 }
 
 const ENRICHMENT_PRIORITY: Record<EnrichmentAvailability, number> = {
@@ -197,6 +214,10 @@ function mergeEnrichment(
     linkedPullRequests: leastAvailable(
       current.linkedPullRequests,
       next.linkedPullRequests,
+    ),
+    communityProfile: leastAvailableOptional(
+      current.communityProfile,
+      next.communityProfile,
     ),
   };
 }
@@ -328,7 +349,11 @@ function EnrichmentNotice({ data }: Readonly<{ data: SearchResponse | null }>) {
     ["repository metadata", data.enrichment.repositoryMetadata],
     ["discussion analysis", data.enrichment.discussionAnalysis],
     ["linked pull requests", data.enrichment.linkedPullRequests],
-  ].filter(([, availability]) => availability !== "complete");
+    ["community profiles", data.enrichment.communityProfile],
+  ].filter(
+    ([, availability]) =>
+      availability !== undefined && availability !== "complete",
+  );
 
   if (unavailableSignals.length === 0) return null;
 
@@ -732,6 +757,7 @@ export function IssueFinder() {
   const [responsiveness, setResponsiveness] = useState(
     DEFAULT_SEARCH_FILTERS.responsiveness,
   );
+  const [readiness, setReadiness] = useState(DEFAULT_SEARCH_FILTERS.readiness);
   const [data, setData] = useState<SearchResponse | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [page, setPage] = useState(1);
@@ -775,6 +801,7 @@ export function IssueFinder() {
         setContributionType(DEFAULT_SEARCH_FILTERS.contributionType);
         setScope(DEFAULT_SEARCH_FILTERS.scope);
         setResponsiveness(DEFAULT_SEARCH_FILTERS.responsiveness);
+        setReadiness(DEFAULT_SEARCH_FILTERS.readiness);
         setData(null);
         setIssues([]);
         setError(null);
@@ -792,6 +819,7 @@ export function IssueFinder() {
       setContributionType(linkedSearch.contributionType);
       setScope(linkedSearch.scope);
       setResponsiveness(linkedSearch.responsiveness);
+      setReadiness(linkedSearch.readiness);
       void searchIssues(undefined, linkedSearch, false);
     }
 
@@ -945,6 +973,10 @@ export function IssueFinder() {
       RESPONSIVENESS_OPTIONS[0],
     [responsiveness],
   );
+  const selectedReadiness = useMemo(
+    () => READINESS_OPTIONS.find((item) => item.value === readiness) ?? READINESS_OPTIONS[0],
+    [readiness],
+  );
 
   const hasMore = useMemo(() => {
     if (!data) return false;
@@ -975,6 +1007,7 @@ export function IssueFinder() {
         contributionType,
         scope,
         responsiveness,
+        readiness,
       });
 
       setSavedSearches((current) => [...current, savedSearch]);
@@ -1029,6 +1062,7 @@ export function IssueFinder() {
     setContributionType(savedSearch.contributionType ?? "any");
     setScope(savedSearch.scope ?? "any");
     setResponsiveness(savedSearch.responsiveness ?? "any");
+    setReadiness(savedSearch.readiness ?? "any");
 
     void searchIssues(undefined, {
       tech: savedSearch.tech,
@@ -1040,6 +1074,7 @@ export function IssueFinder() {
       contributionType: savedSearch.contributionType ?? "any",
       scope: savedSearch.scope ?? "any",
       responsiveness: savedSearch.responsiveness ?? "any",
+      readiness: savedSearch.readiness ?? "any",
     });
   }
 
@@ -1122,6 +1157,7 @@ export function IssueFinder() {
     const searchScope = searchOverride?.scope ?? scope;
     const searchResponsiveness =
       searchOverride?.responsiveness ?? responsiveness;
+    const searchReadiness = searchOverride?.readiness ?? readiness;
 
     if (!searchTech.trim()) {
       setError("Enter a technology to search.");
@@ -1145,6 +1181,7 @@ export function IssueFinder() {
       contributionType: searchContributionType,
       scope: searchScope,
       responsiveness: searchResponsiveness,
+      readiness: searchReadiness,
     });
     const requestId = ++searchRequestId.current;
 
@@ -1204,6 +1241,7 @@ export function IssueFinder() {
         contributionType,
         scope,
         responsiveness,
+        readiness,
       },
       nextPage,
     );
@@ -1422,6 +1460,23 @@ export function IssueFinder() {
                 </SelectTrigger>
                 <SelectContent>
                   {RESPONSIVENESS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={readiness} onValueChange={setReadiness}>
+                <SelectTrigger
+                  className="h-11 w-full"
+                  size="lg"
+                  aria-label="Contribution readiness filter"
+                >
+                  <SelectValue>{selectedReadiness.label}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {READINESS_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>

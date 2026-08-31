@@ -35,7 +35,10 @@ The test suite uses Vitest. Coverage thresholds are configured in `vitest.config
 
 ## Database changes
 
-Database changes must update both the Drizzle schema and a new ordered SQL migration. Migrations may be public because they describe structure, not credentials. Never include tokens, secrets, or production records in them.
+Database changes must update the Drizzle schema, architecture documentation,
+and a new ordered SQL migration. Migrations may be public because they describe
+structure, not credentials. Never include tokens, secrets, or production records
+in them.
 
 ## Testing guidance
 

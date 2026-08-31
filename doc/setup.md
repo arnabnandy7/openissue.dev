@@ -52,6 +52,7 @@ Run the SQL migrations in filename order against the Turso database:
 10. `db/migrations/0010_maintainer_responsiveness.sql`
 11. `db/migrations/0011_issue_feedback.sql`
 12. `db/migrations/0012_opportunity_workflow.sql`
+13. `db/migrations/0013_contribution_readiness.sql`
 
 The first migration creates Better Auth's user, session, account, and verification tables. The second creates user-owned saved searches. Migration files intentionally contain structure only—never credentials or production data.
 
@@ -78,6 +79,8 @@ searches. Existing records default to unrestricted responsiveness.
 The eleventh stores dismissed recommendation feedback and repositories hidden
 by a user. The twelfth adds private state, note, follow-up date, and workflow
 activity fields to saved opportunities; existing opportunities begin in Saved.
+The thirteenth adds the contribution-readiness preference to cloud saved searches;
+existing records continue to include every readiness status.
 
 ## GitHub OAuth
 

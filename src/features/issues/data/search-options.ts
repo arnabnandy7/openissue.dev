@@ -131,3 +131,12 @@ export const RESPONSIVENESS_OPTIONS = [
 export const RESPONSIVENESS_FILTERS = new Set(
   RESPONSIVENESS_OPTIONS.map((option) => option.value),
 );
+
+export const READINESS_OPTIONS = [
+  { value: "any", label: "Any readiness" },
+  { value: "ready", label: "Ready to start" },
+];
+
+export const READINESS_FILTERS = new Set(
+  READINESS_OPTIONS.map((option) => option.value),
+);

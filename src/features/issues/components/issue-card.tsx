@@ -30,10 +30,42 @@ import {
 import { compactNumber, relativeDate } from "@/features/issues/lib/format";
 import { getResponsivenessBoost } from "@/features/issues/lib/repository-responsiveness";
 import type {
+  ContributionReadinessStatus,
   Issue,
   RepositoryHealth,
   RepositoryResponsiveness,
 } from "@/features/issues/types/search";
+
+const READINESS_LABELS: Record<ContributionReadinessStatus, string> = {
+  ready: "Ready to start",
+  ask: "Ask before starting",
+  claimed: "Possibly claimed",
+  poorlyDocumented: "Poorly documented",
+  inactive: "Repository inactive",
+  unknown: "Readiness unknown",
+};
+
+const DOCUMENTATION_LABELS = {
+  readme: "README",
+  contributing: "Contributing guide",
+  license: "License",
+  codeOfConduct: "Code of conduct",
+  issueTemplate: "Issue template",
+  pullRequestTemplate: "Pull-request template",
+} as const;
+
+function getReadinessClassName(status: ContributionReadinessStatus) {
+  if (status === "ready") {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  }
+  if (status === "ask" || status === "poorlyDocumented" || status === "claimed") {
+    return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+  }
+  if (status === "inactive") {
+    return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-400";
+  }
+  return "";
+}
 
 function getQualityBadgeClassName(qualityScore: number) {
   if (qualityScore >= 70) {
@@ -220,6 +252,14 @@ function IssueBadges({ issue }: Readonly<{ issue: Issue }>) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {issue.contributionReadiness ? (
+        <Badge
+          variant="outline"
+          className={getReadinessClassName(issue.contributionReadiness.status)}
+        >
+          {READINESS_LABELS[issue.contributionReadiness.status]}
+        </Badge>
+      ) : null}
       <RepositoryHealthTooltip issue={issue} />
       <ResponsivenessTooltip issue={issue} />
       {issue.hacktoberfest ? (
@@ -291,6 +331,37 @@ export function IssueCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {issue.contributionReadiness ? (
+          <details className="rounded-lg border px-3 py-2 text-sm">
+            <summary className="cursor-pointer font-medium">
+              Contribution readiness checklist
+              {issue.contributionReadiness.score === null
+                ? ""
+                : ` · ${issue.contributionReadiness.score}/100`}
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+              {issue.contributionReadiness.signals.map((signal) => (
+                <li key={signal}>{signal}</li>
+              ))}
+            </ul>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {Object.entries(issue.contributionReadiness.documentation).map(
+                ([name, url]) =>
+                  url ? (
+                    <a
+                      key={name}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      {DOCUMENTATION_LABELS[name as keyof typeof DOCUMENTATION_LABELS]}
+                    </a>
+                  ) : null,
+              )}
+            </div>
+          </details>
+        ) : null}
         {issue.classification?.signals.length ? (
           <div className="flex flex-wrap gap-2" aria-label="Classification signals">
             {issue.classification.signals.map((signal) => (

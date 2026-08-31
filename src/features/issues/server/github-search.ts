@@ -6,6 +6,7 @@ import {
   HACKTOBERFEST_FILTERS,
   LINKED_PR_FILTERS,
   LANGUAGE_ALIASES,
+  READINESS_FILTERS,
   RESPONSIVENESS_FILTERS,
   SCOPE_FILTERS,
   TOPIC_ALIASES,
@@ -15,6 +16,11 @@ import {
   matchesClassification,
 } from "@/features/issues/lib/issue-classification";
 import { rankIssues } from "@/features/issues/lib/ranking";
+import {
+  includeLinkedPullRequestSignal,
+  scoreContributionReadiness,
+  unknownContributionReadiness,
+} from "@/features/issues/lib/contribution-readiness";
 import { scoreRepositoryHealth } from "@/features/issues/lib/repository-health";
 import {
   getResponsivenessBoost,
@@ -42,6 +48,20 @@ const CANDIDATE_PAGE_COUNT = 5;
 const REPO_SEARCH_PAGE_SIZE = 20;
 const REPO_ISSUE_BATCH_SIZE = 10;
 const RESPONSIVENESS_REPOSITORY_LIMIT = 12;
+const COMMUNITY_PROFILE_REPOSITORY_LIMIT = 12;
+
+type GitHubCommunityProfileResponse = {
+  health_percentage: number;
+  files: Partial<Record<
+    | "readme"
+    | "contributing"
+    | "license"
+    | "code_of_conduct"
+    | "issue_template"
+    | "pull_request_template",
+    { html_url?: string | null } | null
+  >>;
+};
 
 type GitHubResponsivenessResponse = {
   data?: {
@@ -84,6 +104,40 @@ function resolveSearchOption(
   fallback: string,
 ) {
   return value && supportedOptions.has(value) ? value : fallback;
+}
+
+function matchesSearchFilters(
+  issue: Issue,
+  filters: {
+    hacktoberfest: string;
+    responsiveness: string;
+    readiness: string;
+    experience: string;
+    contributionType: string;
+    scope: string;
+  },
+) {
+  if (filters.hacktoberfest === "only" && !issue.hacktoberfest) return false;
+  if (
+    filters.responsiveness !== "any" &&
+    issue.repositoryResponsiveness?.status !== filters.responsiveness
+  ) {
+    return false;
+  }
+  if (
+    filters.readiness !== "any" &&
+    issue.contributionReadiness?.status !== filters.readiness
+  ) {
+    return false;
+  }
+  if (!issue.classification) return false;
+
+  return matchesClassification(
+    issue.classification,
+    filters.experience,
+    filters.contributionType,
+    filters.scope,
+  );
 }
 
 function quoteSearchValue(value: string) {
@@ -321,6 +375,51 @@ async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
   };
 }
 
+async function buildSearchScope(tech: string, token?: string) {
+  const repoTopicQuery = buildRepoTopicQuery(tech);
+  const queryParts = ["is:issue", "is:open", "archived:false"];
+
+  if (!repoTopicQuery) {
+    queryParts.push(buildTechQualifier(tech));
+    return { repoTopicQuery, matchingRepos: [], queryParts };
+  }
+
+  const repoSearchUrl = new URL("https://api.github.com/search/repositories");
+  repoSearchUrl.searchParams.set("q", repoTopicQuery);
+  repoSearchUrl.searchParams.set("sort", "updated");
+  repoSearchUrl.searchParams.set("order", "desc");
+  repoSearchUrl.searchParams.set("per_page", String(REPO_SEARCH_PAGE_SIZE));
+  repoSearchUrl.searchParams.set("page", "1");
+  const repoSearchResult = await githubFetch<GitHubRepoSearchResponse>(
+    repoSearchUrl.toString(),
+    token,
+    7200,
+  );
+
+  return {
+    repoTopicQuery,
+    matchingRepos: repoSearchResult.data.items,
+    queryParts,
+  };
+}
+
+function appendQualifier(queryParts: string[], qualifier: string | null) {
+  if (qualifier) queryParts.push(qualifier);
+}
+
+function getSearchTotalCount(
+  searchResults: Array<{ data: GitHubSearchResponse }>,
+  searchesRepositories: boolean,
+) {
+  if (searchesRepositories) {
+    return searchResults.reduce(
+      (count, result) => count + result.data.total_count,
+      0,
+    );
+  }
+  return searchResults[0]?.data.total_count ?? 0;
+}
+
 export async function getRepositoryResponsiveness(
   fullName: string,
   token = process.env.GITHUB_TOKEN,
@@ -362,6 +461,27 @@ export async function getRepositoryResponsiveness(
     repository.issues.nodes,
     repository.pullRequests.nodes,
   );
+}
+
+async function getCommunityProfile(fullName: string, token?: string) {
+  const result = await githubFetch<GitHubCommunityProfileResponse>(
+    `https://api.github.com/repos/${fullName}/community/profile`,
+    token,
+    21600,
+  );
+  const files = result.data.files ?? {};
+
+  return {
+    healthPercentage: result.data.health_percentage,
+    documentation: {
+      readme: files.readme?.html_url ?? null,
+      contributing: files.contributing?.html_url ?? null,
+      license: files.license?.html_url ?? null,
+      codeOfConduct: files.code_of_conduct?.html_url ?? null,
+      issueTemplate: files.issue_template?.html_url ?? null,
+      pullRequestTemplate: files.pull_request_template?.html_url ?? null,
+    },
+  };
 }
 
 export async function searchGitHubRepositories(
@@ -446,6 +566,7 @@ export async function searchGitHubIssues({
   contributionType: rawContributionType,
   scope: rawScope,
   responsiveness: rawResponsiveness,
+  readiness: rawReadiness,
   updatedAfter,
   updatedBefore,
   page = 1,
@@ -459,6 +580,7 @@ export async function searchGitHubIssues({
   contributionType?: string | null;
   scope?: string | null;
   responsiveness?: string | null;
+  readiness?: string | null;
   updatedAfter?: string;
   updatedBefore?: string;
   page?: number;
@@ -492,33 +614,15 @@ export async function searchGitHubIssues({
     RESPONSIVENESS_FILTERS,
     "any",
   );
+  const readiness = resolveSearchOption(rawReadiness, READINESS_FILTERS, "any");
   const token = process.env.GITHUB_TOKEN;
-  const repoTopicQuery = buildRepoTopicQuery(tech);
-  let matchingRepos: GitHubRepo[] = [];
-  const queryParts = [
-    "is:issue",
-    "is:open",
-    "archived:false",
-  ];
-  const linkedPrQualifier = buildLinkedPrQualifier(linkedPr);
-
-  if (repoTopicQuery) {
-    const repoSearchUrl = new URL("https://api.github.com/search/repositories");
-    repoSearchUrl.searchParams.set("q", repoTopicQuery);
-    repoSearchUrl.searchParams.set("sort", "updated");
-    repoSearchUrl.searchParams.set("order", "desc");
-    repoSearchUrl.searchParams.set("per_page", String(REPO_SEARCH_PAGE_SIZE));
-    repoSearchUrl.searchParams.set("page", "1");
-
-    const repoSearchResult = await githubFetch<GitHubRepoSearchResponse>(
-      repoSearchUrl.toString(),
-      token,
-      7200,
-    );
-    matchingRepos = repoSearchResult.data.items;
-  } else {
-    queryParts.push(buildTechQualifier(tech));
-  }
+  const { repoTopicQuery, matchingRepos, queryParts } = await buildSearchScope(
+    tech,
+    token,
+  );
+  const linkedPrQualifier = buildLinkedPrQualifier(
+    readiness === "ready" ? "no" : linkedPr,
+  );
 
   queryParts.push(`label:${quoteSearchValue(label)}`);
 
@@ -530,13 +634,8 @@ export async function searchGitHubIssues({
     updatedBefore,
   );
 
-  if (updatedQualifier) {
-    queryParts.push(updatedQualifier);
-  }
-
-  if (linkedPrQualifier) {
-    queryParts.push(linkedPrQualifier);
-  }
+  appendQualifier(queryParts, updatedQualifier);
+  appendQualifier(queryParts, linkedPrQualifier);
 
   const displayQuery = repoTopicQuery
     ? [
@@ -574,6 +673,9 @@ export async function searchGitHubIssues({
         repositoryMetadata: "complete",
         discussionAnalysis: "complete",
         linkedPullRequests: "complete",
+        ...(rawReadiness !== undefined
+          ? { communityProfile: "complete" as const }
+          : {}),
       },
     };
   }
@@ -607,10 +709,7 @@ export async function searchGitHubIssues({
   const searchResults = await Promise.all(
     searchUrls.map((url) => githubFetch<GitHubSearchResponse>(url, token, 180)),
   );
-  const totalCount =
-    repoBatches.length > 0
-      ? searchResults.reduce((count, result) => count + result.data.total_count, 0)
-      : searchResults[0]?.data.total_count ?? 0;
+  const totalCount = getSearchTotalCount(searchResults, repoBatches.length > 0);
   const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
   const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
   const repoEntriesFromSearch = matchingRepos.map((repo) => [repo.full_name, repo] as const);
@@ -649,6 +748,20 @@ export async function searchGitHubIssues({
         ] as const;
       } catch {
         return [fullName, unknownRepositoryResponsiveness()] as const;
+      }
+    }),
+  );
+  const communityProfileRepoNames = rawReadiness === undefined
+    ? []
+    : Array.from(
+        new Set(candidateIssues.map((issue) => getRepoFullName(issue.repository_url))),
+      ).slice(0, COMMUNITY_PROFILE_REPOSITORY_LIMIT);
+  const communityProfileEntries = await Promise.all(
+    communityProfileRepoNames.map(async (fullName) => {
+      try {
+        return [fullName, await getCommunityProfile(fullName, token)] as const;
+      } catch {
+        return [fullName, undefined] as const;
       }
     }),
   );
@@ -717,6 +830,7 @@ export async function searchGitHubIssues({
   >(commentEntries);
   const repos = new Map(repoEntries);
   const repositoryResponsiveness = new Map(responsivenessEntries);
+  const communityProfiles = new Map(communityProfileEntries);
   const rankedIssues = rankIssues(
     candidateIssues.map((issue): Issue => {
       const repoName = getRepoFullName(issue.repository_url);
@@ -737,6 +851,15 @@ export async function searchGitHubIssues({
         repositoryResponsiveness.get(repoName) ??
         unknownRepositoryResponsiveness("Repository outside bounded analytics sample");
       const classification = classifyIssue(issue);
+      const contributionReadiness = communityProfiles.has(repoName)
+        ? scoreContributionReadiness({
+            profile: communityProfiles.get(repoName),
+            repositoryHealth,
+            responsiveness: responsivenessSummary,
+            assigned,
+            helpStatus,
+          })
+        : unknownContributionReadiness("Repository outside bounded community-profile sample");
 
       return {
         id: issue.html_url,
@@ -755,6 +878,7 @@ export async function searchGitHubIssues({
         hacktoberfestSource,
         helpStatus,
         classification,
+        ...(rawReadiness !== undefined ? { contributionReadiness } : {}),
         qualityScore:
           scoreIssue(issue, repo, helpStatus, Boolean(hacktoberfestSource)) +
           Math.round((repositoryHealth.score ?? 0) / 10) +
@@ -768,22 +892,20 @@ export async function searchGitHubIssues({
           repositoryMetadata: Boolean(repo),
           discussionAnalysis: discussion.available,
           linkedPullRequests: false,
+          ...(rawReadiness !== undefined
+            ? { communityProfile: communityProfiles.get(repoName) !== undefined }
+            : {}),
         },
       };
-    }).filter(
-      (issue) =>
-        (hacktoberfest !== "only" || issue.hacktoberfest) &&
-        (responsiveness === "any" ||
-          issue.repositoryResponsiveness?.status === responsiveness) &&
-        Boolean(
-          issue.classification &&
-            matchesClassification(
-              issue.classification,
-              experience,
-              contributionType,
-              scope,
-            ),
-        ),
+    }).filter((issue) =>
+      matchesSearchFilters(issue, {
+        hacktoberfest,
+        responsiveness,
+        readiness,
+        experience,
+        contributionType,
+        scope,
+      }),
     ),
     sort,
   );
@@ -809,10 +931,21 @@ export async function searchGitHubIssues({
     return {
       ...issue,
       linkedPrCount: linkedPullRequests.count,
+      ...(issue.contributionReadiness
+        ? {
+            contributionReadiness: includeLinkedPullRequestSignal(
+              issue.contributionReadiness,
+              linkedPullRequests.count,
+            ),
+          }
+        : {}),
       enrichment: {
         repositoryMetadata: issue.enrichment?.repositoryMetadata ?? false,
         discussionAnalysis: issue.enrichment?.discussionAnalysis ?? false,
         linkedPullRequests: linkedPullRequests.available,
+        ...(rawReadiness !== undefined
+          ? { communityProfile: issue.enrichment?.communityProfile ?? false }
+          : {}),
       },
     };
   });
@@ -829,6 +962,9 @@ export async function searchGitHubIssues({
       repositoryMetadata: summarizeEnrichment(issues, "repositoryMetadata"),
       discussionAnalysis: summarizeEnrichment(issues, "discussionAnalysis"),
       linkedPullRequests: summarizeEnrichment(issues, "linkedPullRequests"),
+      ...(rawReadiness !== undefined
+        ? { communityProfile: summarizeEnrichment(issues, "communityProfile") }
+        : {}),
     },
   };
 }
