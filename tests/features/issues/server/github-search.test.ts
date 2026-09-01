@@ -509,6 +509,33 @@ describe("searchGitHubIssues", () => {
     ).rejects.toThrow("GitHub API error 403: forbidden");
   });
 
+  it("detects rate limit errors and throws RateLimitError", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json", "retry-after": "120" },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 120,
+    });
+  });
+
   it("returns an empty result when a topic has no matching repositories", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       jsonResponse({ total_count: 0, items: [] }),

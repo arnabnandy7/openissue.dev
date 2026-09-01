@@ -50,6 +50,20 @@ const REPO_ISSUE_BATCH_SIZE = 10;
 const RESPONSIVENESS_REPOSITORY_LIMIT = 12;
 const COMMUNITY_PROFILE_REPOSITORY_LIMIT = 12;
 
+export class RateLimitError extends Error {
+  retryAfterSeconds: number | null;
+
+  constructor(message: string, retryAfterSeconds: number | null = null) {
+    super(message);
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+export function isRateLimitError(error: unknown): error is RateLimitError {
+  return error instanceof RateLimitError;
+}
+
 type GitHubCommunityProfileResponse = {
   health_percentage: number;
   files: Partial<Record<
@@ -366,6 +380,16 @@ async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
 
   if (!response.ok) {
     const body = await response.text();
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
+
+    if (response.status === 403 && isRateLimitResponse(body)) {
+      throw new RateLimitError(
+        "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
+        retryAfterSeconds,
+      );
+    }
+
     throw new Error(`GitHub API error ${response.status}: ${body}`);
   }
 
@@ -373,6 +397,16 @@ async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
     data: (await response.json()) as T,
     rateLimitRemaining: response.headers.get("x-ratelimit-remaining"),
   };
+}
+
+function isRateLimitResponse(body: string): boolean {
+  const lower = body.toLowerCase();
+  return (
+    lower.includes("rate limit") ||
+    lower.includes("rate_limit") ||
+    lower.includes("api rate limit exceeded") ||
+    lower.includes("secondary rate limit")
+  );
 }
 
 async function buildSearchScope(tech: string, token?: string) {
@@ -449,7 +483,20 @@ export async function getRepositoryResponsiveness(
     next: { revalidate: 21600 },
   });
 
-  if (!response.ok) throw new Error(`GitHub GraphQL error ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text();
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
+
+    if (response.status === 403 && isRateLimitResponse(body)) {
+      throw new RateLimitError(
+        "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
+        retryAfterSeconds,
+      );
+    }
+
+    throw new Error(`GitHub GraphQL error ${response.status}`);
+  }
   const payload = (await response.json()) as GitHubResponsivenessResponse;
   const repository = payload.data?.repository;
 
