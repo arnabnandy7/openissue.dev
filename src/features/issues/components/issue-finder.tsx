@@ -39,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ErrorCard } from "@/components/ui/error-card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -127,7 +128,11 @@ function getSearchFilters(search: string): SearchFilters | null {
     tech,
     label: getSupportedValue(params.get("label"), LABEL_OPTIONS, "help-wanted"),
     sort: getSupportedValue(params.get("sort"), SORT_OPTIONS, "updated"),
-    linkedPr: getSupportedValue(params.get("linkedPr"), LINKED_PR_OPTIONS, "any"),
+    linkedPr: getSupportedValue(
+      params.get("linkedPr"),
+      LINKED_PR_OPTIONS,
+      "any",
+    ),
     hacktoberfest: getSupportedValue(
       params.get("hacktoberfest"),
       HACKTOBERFEST_OPTIONS,
@@ -302,16 +307,54 @@ function DigestControls({
 function SearchSummary({
   error,
   data,
-}: Readonly<{ error: string | null; data: SearchResponse | null }>) {
+  rateLimitInfo,
+  onRetry,
+  isSignedIn,
+}: Readonly<{
+  error: string | null;
+  data: SearchResponse | null;
+  rateLimitInfo: { retryAfter: number | null } | null;
+  onRetry: () => void;
+  isSignedIn: boolean;
+}>) {
   return (
     <>
       {error ? (
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">Search failed</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-        </Card>
+        rateLimitInfo ? (
+          <ErrorCard
+            variant="warning"
+            title="Too many requests: please wait"
+            message="GitHub is temporarily limiting how many searches you can run. This usually resets in a few minutes."
+            description={
+              isSignedIn
+                ? "You can try again shortly, or wait for the limit to reset."
+                : "You can try again shortly, or sign in with GitHub for higher rate limits."
+            }
+            actions={[
+              { label: "Try again", onClick: onRetry },
+              ...(isSignedIn
+                ? []
+                : [
+                    {
+                      label: "Sign in for higher limits",
+                      onClick: () =>
+                        authClient.signIn.social({
+                          provider: "github",
+                          callbackURL: "/",
+                        }),
+                    },
+                  ]),
+            ]}
+            technicalDetails={error}
+          />
+        ) : (
+          <ErrorCard
+            variant="error"
+            title="Search failed"
+            message={error}
+            actions={[{ label: "Try again", onClick: onRetry }]}
+          />
+        )
       ) : null}
       {data ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -360,11 +403,15 @@ function EnrichmentNotice({ data }: Readonly<{ data: SearchResponse | null }>) {
   return (
     <Card className="border-amber-500/30 bg-amber-500/5">
       <CardHeader>
-        <CardTitle className="text-base">Some ranking details are unavailable</CardTitle>
+        <CardTitle className="text-base">
+          Some ranking details are unavailable
+        </CardTitle>
         <CardDescription>
-          Results remain usable, but {unavailableSignals.map(([name, availability]) =>
-            `${name} is ${availability}`,
-          ).join("; ")}. Scores use the signals GitHub returned.
+          Results remain usable, but{" "}
+          {unavailableSignals
+            .map(([name, availability]) => `${name} is ${availability}`)
+            .join("; ")}
+          . Scores use the signals GitHub returned.
         </CardDescription>
       </CardHeader>
     </Card>
@@ -386,6 +433,9 @@ function RankedIssuesPanel({
   hasMore,
   isLoadingMore,
   savedOpportunityUrls,
+  rateLimitInfo,
+  onRetry,
+  isSignedIn,
   onIssueOpen,
   onIssueSaveChange,
   onLoadMore,
@@ -397,6 +447,9 @@ function RankedIssuesPanel({
   hasMore: boolean;
   isLoadingMore: boolean;
   savedOpportunityUrls: ReadonlySet<string>;
+  rateLimitInfo: { retryAfter: number | null } | null;
+  onRetry: () => void;
+  isSignedIn: boolean;
   onIssueOpen?: (issue: Issue) => void;
   onIssueSaveChange?: (issue: Issue, saved: boolean) => void;
   onLoadMore: () => void;
@@ -408,7 +461,13 @@ function RankedIssuesPanel({
       aria-label="Opportunities"
       className="space-y-4"
     >
-      <SearchSummary error={error} data={data} />
+      <SearchSummary
+        error={error}
+        data={data}
+        rateLimitInfo={rateLimitInfo}
+        onRetry={onRetry}
+        isSignedIn={isSignedIn}
+      />
       <EnrichmentNotice data={data} />
       {isLoading ? <LoadingResults /> : null}
       {!isLoading && data && issues.length === 0 ? (
@@ -416,7 +475,8 @@ function RankedIssuesPanel({
           <CardHeader>
             <CardTitle className="text-base">No matching issues</CardTitle>
             <CardDescription>
-              Try a broader technology, another label, or recently updated sorting.
+              Try a broader technology, another label, or recently updated
+              sorting.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -463,14 +523,14 @@ function RecommendationsPanel({
 }>) {
   const [data, setData] = useState<RecommendationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preferredSearchId, setPreferredSearchId] = useState(() =>
-    savedSearches.at(-1)?.id ?? "",
+  const [preferredSearchId, setPreferredSearchId] = useState(
+    () => savedSearches.at(-1)?.id ?? "",
   );
   const selectedSearchId = savedSearches.some(
     (search) => search.id === preferredSearchId,
   )
     ? preferredSearchId
-    : savedSearches.at(-1)?.id ?? "";
+    : (savedSearches.at(-1)?.id ?? "");
 
   useEffect(() => {
     let cancelled = false;
@@ -511,7 +571,9 @@ function RecommendationsPanel({
 
     setData({
       ...data,
-      recommendations: data.recommendations.filter((r) => r.issue.id !== issue.id),
+      recommendations: data.recommendations.filter(
+        (r) => r.issue.id !== issue.id,
+      ),
     });
 
     try {
@@ -546,14 +608,19 @@ function RecommendationsPanel({
       {savedSearches.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Recommendation preferences</CardTitle>
+            <CardTitle className="text-base">
+              Recommendation preferences
+            </CardTitle>
             <CardDescription>
               Select one saved search to use its technology and label.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Select value={selectedSearchId} onValueChange={selectSearch}>
-              <SelectTrigger className="w-full" aria-label="Recommendation saved search">
+              <SelectTrigger
+                className="w-full"
+                aria-label="Recommendation saved search"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -581,9 +648,12 @@ function RecommendationsPanel({
       {!selectedSearchId || data?.preferenceCount === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Save a search to get recommendations</CardTitle>
+            <CardTitle className="text-base">
+              Save a search to get recommendations
+            </CardTitle>
             <CardDescription>
-              Saved technologies and labels become your recommendation preferences.
+              Saved technologies and labels become your recommendation
+              preferences.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -598,17 +668,19 @@ function RecommendationsPanel({
           </CardHeader>
         </Card>
       ) : null}
-      {selectedSearchId ? data?.recommendations.map((recommendation) => (
-        <IssueCard
-          key={recommendation.issue.id}
-          issue={recommendation.issue}
-          matchSignals={recommendation.matchSignals}
-          isSaved={savedOpportunityUrls.has(recommendation.issue.url)}
-          onOpen={onIssueOpen}
-          onSaveChange={onIssueSaveChange}
-          onDismiss={handleDismiss}
-        />
-      )) : null}
+      {selectedSearchId
+        ? data?.recommendations.map((recommendation) => (
+            <IssueCard
+              key={recommendation.issue.id}
+              issue={recommendation.issue}
+              matchSignals={recommendation.matchSignals}
+              isSaved={savedOpportunityUrls.has(recommendation.issue.url)}
+              onOpen={onIssueOpen}
+              onSaveChange={onIssueSaveChange}
+              onDismiss={handleDismiss}
+            />
+          ))
+        : null}
     </div>
   );
 }
@@ -666,7 +738,11 @@ function IssueContentTabs({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 border-b pb-3" role="tablist" aria-label="Issue activity">
+      <div
+        className="flex gap-2 border-b pb-3"
+        role="tablist"
+        aria-label="Issue activity"
+      >
         <Button
           type="button"
           role="tab"
@@ -725,7 +801,9 @@ function IssueContentTabs({
             role="tab"
             aria-selected={activeTab === "hidden-repositories"}
             aria-controls="hidden-repositories-panel"
-            variant={activeTab === "hidden-repositories" ? "default" : "outline"}
+            variant={
+              activeTab === "hidden-repositories" ? "default" : "outline"
+            }
             size="sm"
             onClick={() => onTabChange("hidden-repositories")}
           >
@@ -739,7 +817,8 @@ function IssueContentTabs({
 }
 
 export function IssueFinder() {
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const [tech, setTech] = useState(DEFAULT_SEARCH_FILTERS.tech);
   const [label, setLabel] = useState(DEFAULT_SEARCH_FILTERS.label);
   const [sort, setSort] = useState(DEFAULT_SEARCH_FILTERS.sort);
@@ -764,6 +843,9 @@ export function IssueFinder() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    retryAfter: number | null;
+  } | null>(null);
   const [cooldown, setCooldown] = useState(false);
   const searchRequestId = useRef(0);
 
@@ -777,7 +859,8 @@ export function IssueFinder() {
     new Set(),
   );
   const [opportunityRevision, setOpportunityRevision] = useState(0);
-  const [activeContentTab, setActiveContentTab] = useState<ContentTab>("results");
+  const [activeContentTab, setActiveContentTab] =
+    useState<ContentTab>("results");
   const selectedContentTab = session?.user.id ? activeContentTab : "results";
 
   useEffect(() => {
@@ -805,6 +888,7 @@ export function IssueFinder() {
         setData(null);
         setIssues([]);
         setError(null);
+        setRateLimitInfo(null);
         setPage(1);
         setIsLoading(false);
         return;
@@ -964,7 +1048,8 @@ export function IssueFinder() {
     [contributionType],
   );
   const selectedScope = useMemo(
-    () => SCOPE_OPTIONS.find((item) => item.value === scope) ?? SCOPE_OPTIONS[0],
+    () =>
+      SCOPE_OPTIONS.find((item) => item.value === scope) ?? SCOPE_OPTIONS[0],
     [scope],
   );
   const selectedResponsiveness = useMemo(
@@ -974,7 +1059,9 @@ export function IssueFinder() {
     [responsiveness],
   );
   const selectedReadiness = useMemo(
-    () => READINESS_OPTIONS.find((item) => item.value === readiness) ?? READINESS_OPTIONS[0],
+    () =>
+      READINESS_OPTIONS.find((item) => item.value === readiness) ??
+      READINESS_OPTIONS[0],
     [readiness],
   );
 
@@ -1168,6 +1255,7 @@ export function IssueFinder() {
     setActiveContentTab("results");
     setCooldown(true);
     setError(null);
+    setRateLimitInfo(null);
     setIssues([]);
     setPage(1);
 
@@ -1190,7 +1278,15 @@ export function IssueFinder() {
       const payload = (await response.json()) as SearchResponse;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Search failed.");
+        const error = new Error(payload.error ?? "Search failed.") as Error & {
+          rateLimit?: boolean;
+          retryAfter?: number | null;
+        };
+        if (payload.rateLimit) {
+          error.rateLimit = true;
+          error.retryAfter = payload.retryAfter ?? null;
+        }
+        throw error;
       }
 
       if (requestId !== searchRequestId.current) return;
@@ -1208,11 +1304,23 @@ export function IssueFinder() {
     } catch (searchError) {
       if (requestId !== searchRequestId.current) return;
 
-      setError(
+      const message =
         searchError instanceof Error
           ? searchError.message
-          : "Search failed. Try another technology or label.",
-      );
+          : "Search failed. Try another technology or label.";
+
+      setError(message);
+
+      // Detect rate limit errors from the API response
+      if (searchError instanceof Error && "rateLimit" in searchError) {
+        const rateLimitError = searchError as Error & {
+          rateLimit?: boolean;
+          retryAfter?: number | null;
+        };
+        if (rateLimitError.rateLimit) {
+          setRateLimitInfo({ retryAfter: rateLimitError.retryAfter ?? null });
+        }
+      }
     } finally {
       if (requestId === searchRequestId.current) {
         setIsLoading(false);
@@ -1228,6 +1336,7 @@ export function IssueFinder() {
 
     setIsLoadingMore(true);
     setError(null);
+    setRateLimitInfo(null);
 
     const nextPage = page + 1;
     const params = createSearchParams(
@@ -1251,7 +1360,17 @@ export function IssueFinder() {
       const payload = (await response.json()) as SearchResponse;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to load more issues.");
+        const error = new Error(
+          payload.error ?? "Failed to load more issues.",
+        ) as Error & {
+          rateLimit?: boolean;
+          retryAfter?: number | null;
+        };
+        if (payload.rateLimit) {
+          error.rateLimit = true;
+          error.retryAfter = payload.retryAfter ?? null;
+        }
+        throw error;
       }
 
       setIssues((prev) => mergeRankedIssues(prev, payload.issues, sort));
@@ -1261,11 +1380,21 @@ export function IssueFinder() {
         enrichment: mergeEnrichment(current?.enrichment, payload.enrichment),
       }));
     } catch (searchError) {
-      setError(
+      const message =
         searchError instanceof Error
           ? searchError.message
-          : "Failed to load more issues.",
-      );
+          : "Failed to load more issues.";
+      setError(message);
+
+      if (searchError instanceof Error && "rateLimit" in searchError) {
+        const rateLimitError = searchError as Error & {
+          rateLimit?: boolean;
+          retryAfter?: number | null;
+        };
+        if (rateLimitError.rateLimit) {
+          setRateLimitInfo({ retryAfter: rateLimitError.retryAfter ?? null });
+        }
+      }
     } finally {
       setIsLoadingMore(false);
     }
@@ -1531,10 +1660,7 @@ export function IssueFinder() {
                 label="Raw GitHub matches"
                 value={data ? compactNumber(data.totalCount) : "-"}
               />
-              <Metric
-                label="GitHub token"
-                value={tokenStatus}
-              />
+              <Metric label="GitHub token" value={tokenStatus} />
             </CardContent>
           </Card>
         </div>
@@ -1693,9 +1819,10 @@ export function IssueFinder() {
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
               savedOpportunityUrls={savedOpportunityUrls}
-              onIssueOpen={
-                session?.user.id ? handleOpportunityOpen : undefined
-              }
+              rateLimitInfo={rateLimitInfo}
+              onRetry={() => void searchIssues()}
+              isSignedIn={Boolean(session?.user.id)}
+              onIssueOpen={session?.user.id ? handleOpportunityOpen : undefined}
               onIssueSaveChange={
                 session?.user.id
                   ? (selectedIssue, saved) =>
