@@ -29,6 +29,7 @@ const savedSearch = {
   linkedPr: "any",
   hacktoberfest: "any",
   responsiveness: "responsive",
+  readiness: "ready",
   createdAt: "2026-08-19T00:00:00.000Z",
 };
 
@@ -89,6 +90,7 @@ describe("weekly digest", () => {
     expect(digest.issueCount).toBe(1);
     expect(digest.html).toContain("Improve &lt;docs&gt;");
     expect(digest.html).toContain("tech=React");
+    expect(digest.html).toContain("readiness=ready");
     expect(digest.html).toContain("React &amp; docs");
     expect(digest.html).toContain("baseline recorded");
     expect(digest.html).toContain("Responsive maintainer responsiveness");
@@ -103,6 +105,7 @@ describe("weekly digest", () => {
         updatedAfter: "2026-08-17",
         updatedBefore: "2026-08-23",
         responsiveness: "responsive",
+        readiness: "ready",
       }),
     );
   });
@@ -120,6 +123,7 @@ describe("weekly digest", () => {
       contributionType: "any",
       scope: "any",
       responsiveness: "responsive",
+      readiness: "ready",
     });
 
     const digest = await buildWeeklyDigest(
@@ -162,11 +166,13 @@ describe("weekly digest", () => {
     expect(getDigestSearchKey({ ...savedSearch, tech: " React " })).toContain(
       '"tech":"react"',
     );
+    expect(getDigestSearchKey(savedSearch)).toContain('"readiness":"ready"');
   });
 
   it("shows unknown responsiveness when older issue data has no analytics", async () => {
     const issueWithoutResponsiveness = { ...response().issues[0] };
     delete issueWithoutResponsiveness.repositoryResponsiveness;
+    delete issueWithoutResponsiveness.contributionReadiness;
     searchGitHubIssues.mockResolvedValue({
       ...response(),
       issues: [issueWithoutResponsiveness],
@@ -175,8 +181,41 @@ describe("weekly digest", () => {
     const digest = await buildWeeklyDigest([savedSearch], "https://openissue.dev/");
 
     expect(digest.html).toContain("80 quality");
+    expect(digest.html).toContain("Readiness unknown");
     expect(digest.html).toContain("Unknown maintainer responsiveness");
     expect(digest.html).not.toContain("0 samples over 90 days");
+  });
+
+  it("shows non-ready classifications and unknown repository health", async () => {
+    searchGitHubIssues.mockResolvedValue({
+      ...response(),
+      issues: [{
+        ...response().issues[0],
+        repositoryHealth: {
+          score: null,
+          label: "unknown",
+          signals: ["Repository metadata unavailable"],
+        },
+        contributionReadiness: {
+          score: 55,
+          status: "ask",
+          signals: ["Ask the maintainer before starting"],
+          documentation: {
+            readme: null,
+            contributing: null,
+            license: null,
+            codeOfConduct: null,
+            issueTemplate: null,
+            pullRequestTemplate: null,
+          },
+        },
+      }],
+    });
+
+    const digest = await buildWeeklyDigest([savedSearch], "https://openissue.dev/");
+
+    expect(digest.html).toContain("ask");
+    expect(digest.html).toContain("Health unknown");
   });
 
   it("reports down and steady trends and keeps the higher-ranked duplicate", async () => {

@@ -133,6 +133,7 @@ export const savedSearch = sqliteTable(
     contributionType: text("contribution_type").default("any").notNull(),
     scope: text("scope").default("any").notNull(),
     responsiveness: text("responsiveness").default("any").notNull(),
+    readiness: text("readiness").default("any").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("saved_search_userId_idx").on(table.userId)],

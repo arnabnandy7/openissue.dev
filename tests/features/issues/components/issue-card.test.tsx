@@ -46,7 +46,10 @@ function issue(overrides: Partial<Issue> = {}): Issue {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("issue presentation", () => {
   it("renders a high-quality open Hacktoberfest issue", () => {
@@ -147,6 +150,106 @@ describe("issue presentation", () => {
     expect(screen.getByText("responsive maintainers")).toBeTruthy();
     expect(screen.getByText("Beginner friendly")).toBeTruthy();
     expect(screen.getByText("Small scope")).toBeTruthy();
+  });
+
+  it("renders contribution readiness signals and documentation links", () => {
+    render(
+      <IssueCard
+        issue={issue({
+          contributionReadiness: {
+            score: 88,
+            status: "ready",
+            signals: ["6 of 6 community documents available", "Issue is unassigned"],
+            documentation: {
+              readme: "https://github.com/acme/repo#readme",
+              contributing: "https://github.com/acme/repo/blob/main/CONTRIBUTING.md",
+              license: null,
+              codeOfConduct: null,
+              issueTemplate: null,
+              pullRequestTemplate: null,
+            },
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Ready to start")).toBeTruthy();
+    expect(screen.getByText("Contribution readiness checklist · 88/100")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Contributing guide" })).toHaveProperty(
+      "href",
+      "https://github.com/acme/repo/blob/main/CONTRIBUTING.md",
+    );
+  });
+
+  it.each([
+    ["ask", "Ask before starting"],
+    ["claimed", "Possibly claimed"],
+    ["poorlyDocumented", "Poorly documented"],
+    ["inactive", "Repository inactive"],
+    ["unknown", "Readiness unknown"],
+  ] as const)("renders the %s readiness variant", (status, label) => {
+    render(
+      <IssueCard
+        issue={issue({
+          contributionReadiness: {
+            score: null,
+            status,
+            signals: ["Community profile unavailable"],
+            documentation: {
+              readme: null,
+              contributing: null,
+              license: null,
+              codeOfConduct: null,
+              issueTemplate: null,
+              pullRequestTemplate: null,
+            },
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByText("Contribution readiness checklist")).toBeTruthy();
+  });
+
+  it("renders trending and slow-responsiveness fallback details", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const user = userEvent.setup();
+
+    render(
+      <IssueCard
+        issue={issue({
+          trendingScore: 72,
+          repositoryResponsiveness: {
+            status: "slow",
+            sampleDays: 90,
+            sampleSize: 8,
+            signals: ["Maintainer responses are often delayed"],
+          },
+          enrichment: {
+            repositoryMetadata: false,
+            discussionAnalysis: true,
+            linkedPullRequests: true,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("72 trending")).toBeTruthy();
+    expect(screen.getByText("slow maintainers")).toBeTruthy();
+    await user.hover(screen.getByText("72 trending"));
+    expect(
+      await screen.findByText(
+        "Repository stars and health were unavailable for this result.",
+      ),
+    ).toBeTruthy();
   });
 
   it("does not imply unavailable enrichment was measured", () => {

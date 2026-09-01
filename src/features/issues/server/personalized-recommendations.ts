@@ -21,6 +21,7 @@ function preferenceSignals(preference: SavedSearch) {
     signals.push(`Contribution type: ${preference.contributionType}`);
   }
   if (preference.scope === "small") signals.push("Scope: small");
+  if (preference.readiness === "ready") signals.push("Ready to start");
 
   return signals;
 }
@@ -73,6 +74,7 @@ export async function buildPersonalizedRecommendations(
         experience: preference.experience ?? "any",
         contributionType: preference.contributionType ?? "any",
         scope: preference.scope ?? "any",
+        readiness: preference.readiness ?? "any",
       }),
     ),
   );

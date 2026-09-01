@@ -9,9 +9,11 @@
 - Filters by explicit experience, contribution-type, and small-scope signals
 - Scores repository health from maintenance and contributor-activity signals
 - Summarizes maintainer responsiveness from bounded recent contribution samples
+- Classifies contribution readiness from cached community documentation and activity signals
 - Sorts and ranks results using issue quality and repository health
 - Keeps successful searches in shareable, browser-navigable URLs
 - Identifies when optional GitHub enrichment is incomplete
+- Links repository contribution documentation from expandable issue checklists
 - Surfaces trending opportunities by recent activity, discussion, stars, and repository health
 - Supports reusable saved searches without requiring an account
 - Adds GitHub sign-in for cloud-backed saved searches that survive cleared browser storage

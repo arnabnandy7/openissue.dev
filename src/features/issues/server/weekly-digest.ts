@@ -29,6 +29,7 @@ export function getDigestSearchKey(search: SavedSearch) {
     contributionType: search.contributionType ?? "any",
     scope: search.scope ?? "any",
     responsiveness: search.responsiveness ?? "any",
+    readiness: search.readiness ?? "any",
   });
 }
 
@@ -48,6 +49,12 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function describeReadiness(issue: Issue) {
+  if (!issue.contributionReadiness) return "Readiness unknown";
+  if (issue.contributionReadiness.status === "ready") return "Ready to start";
+  return issue.contributionReadiness.status;
 }
 
 function addAddressBookNotice(html: string, senderAddress: string) {
@@ -70,6 +77,7 @@ function searchUrl(baseUrl: string, search: SavedSearch) {
   url.searchParams.set("contributionType", search.contributionType ?? "any");
   url.searchParams.set("scope", search.scope ?? "any");
   url.searchParams.set("responsiveness", search.responsiveness ?? "any");
+  url.searchParams.set("readiness", search.readiness ?? "any");
   return url.toString();
 }
 
@@ -113,6 +121,7 @@ export async function buildWeeklyDigest(
         contributionType: search.contributionType ?? "any",
         scope: search.scope ?? "any",
         responsiveness: search.responsiveness ?? "any",
+        readiness: search.readiness ?? "any",
         updatedAfter,
         updatedBefore,
       }),
@@ -178,8 +187,9 @@ export async function buildWeeklyDigest(
             const healthText = health.score === null
               ? "Health unknown"
               : `${health.score} ${health.label} health`;
+            const readiness = describeReadiness(issue);
 
-            return `<li><a href="${escapeHtml(issue.url)}">${escapeHtml(issue.title)}</a> in ${escapeHtml(issue.repo)} — ${issue.qualityScore} quality · ${escapeHtml(healthText)} · ${escapeHtml(status)} maintainer responsiveness${escapeHtml(sample)}</li>`;
+            return `<li><a href="${escapeHtml(issue.url)}">${escapeHtml(issue.title)}</a> in ${escapeHtml(issue.repo)} — ${issue.qualityScore} quality · ${escapeHtml(readiness)} · ${escapeHtml(healthText)} · ${escapeHtml(status)} maintainer responsiveness${escapeHtml(sample)}</li>`;
           },
         )
         .join("")

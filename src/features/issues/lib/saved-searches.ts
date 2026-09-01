@@ -4,6 +4,7 @@ import {
   HACKTOBERFEST_FILTERS,
   LABEL_OPTIONS,
   LINKED_PR_FILTERS,
+  READINESS_FILTERS,
   RESPONSIVENESS_FILTERS,
   SCOPE_FILTERS,
   SORT_OPTIONS,
@@ -21,6 +22,7 @@ export type SavedSearch = {
   contributionType?: string;
   scope?: string;
   responsiveness?: string;
+  readiness?: string;
   createdAt: string;
 };
 
@@ -36,6 +38,7 @@ export function isValidSavedSearch(value: unknown): value is SavedSearch {
   const contributionType = search.contributionType ?? "any";
   const scope = search.scope ?? "any";
   const responsiveness = search.responsiveness ?? "any";
+  const readiness = search.readiness ?? "any";
 
   return (
     typeof search.id === "string" &&
@@ -53,7 +56,8 @@ export function isValidSavedSearch(value: unknown): value is SavedSearch {
     EXPERIENCE_FILTERS.has(experience) &&
     CONTRIBUTION_TYPE_FILTERS.has(contributionType) &&
     SCOPE_FILTERS.has(scope) &&
-    RESPONSIVENESS_FILTERS.has(responsiveness)
+    RESPONSIVENESS_FILTERS.has(responsiveness) &&
+    READINESS_FILTERS.has(readiness)
   );
 }
 

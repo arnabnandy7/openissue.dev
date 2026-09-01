@@ -70,6 +70,16 @@ flowchart LR
 
 Candidate issues are enriched where possible with repository metadata, recent discussion, assignment state, linked pull requests, and Hacktoberfest signals. Repository health uses recent pushes, open issue and pull-request activity, stars, forks, and issue-tracker availability to distinguish active, moderate, and stale projects. The health score contributes a small optional boost to issue quality ranking and is shown directly on issue cards. The application ranks the enriched results for contributor relevance and returns paginated results to the browser.
 
+Contribution readiness combines the existing repository health, maintainer
+responsiveness, assignment, and discussion signals with GitHub's community
+profile. Community-profile requests are limited to 12 repositories per search
+and cached for six hours. The profile supplies README, contributing guide,
+license, code-of-conduct, issue-template, and pull-request-template links.
+Issue cards show an explainable readiness status and expandable checklist.
+Unavailable profiles produce `Unknown` rather than a zero score; inactive,
+claimed, and poorly documented opportunities remain distinguishable from issues
+that are ready to start or should be discussed with maintainers first.
+
 Maintainer responsiveness remains separate from repository health. For at most 12
 candidate repositories per search, a cached six-hour GitHub GraphQL request samples
 up to 20 recently updated issues and pull requests from the previous 90 days. The
@@ -100,6 +110,7 @@ Search filters currently include:
 - Documentation, tests, bug fix, or feature contribution type
 - All scopes or small scope
 - Any, responsive, variable, slow, or unknown maintainer responsiveness
+- Any readiness or Ready to start
 
 Experience, contribution type, and scope classifications use explicit issue
 labels and structured issue-template fields. Results show the signals that
@@ -249,6 +260,7 @@ erDiagram
     text contribution_type
     text scope
     text responsiveness
+    text readiness
   }
 
   OPPORTUNITY {
@@ -370,6 +382,8 @@ contributing signals beside each repository. Weekly recommendations display the
 same quality and repository-health scores used to rank results in the portal.
 Repository alerts enrich their newest issues with repository health and the same
 quality formula before adding the repository responsiveness boost.
+Saved-search recommendations and weekly digest searches retain the selected
+contribution-readiness filter, and weekly issue summaries include readiness.
 Saved-search recommendations, repository alerts, repository metadata, and
 post-delivery persistence run concurrently where independent so SMTP delivery is
 not delayed by avoidable serial network or database round trips.
