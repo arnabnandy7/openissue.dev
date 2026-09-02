@@ -12,6 +12,7 @@ type ErrorCardAction = {
   label: string;
   onClick: () => void;
   variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  disabled?: boolean;
 };
 
 type ErrorCardProps = {
@@ -75,6 +76,7 @@ export function ErrorCard({
                 variant={action.variant ?? "default"}
                 size="sm"
                 onClick={action.onClick}
+                disabled={action.disabled}
               >
                 {action.label}
               </Button>

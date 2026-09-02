@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render as testingLibraryRender,
@@ -629,6 +630,12 @@ describe("IssueFinder", () => {
     fireEvent.submit(
       screen.getByRole("button", { name: "Search" }).closest("form")!,
     );
+    await waitFor(
+      () => {
+        expect(screen.queryByRole("button", { name: "Saved" })).not.toBeNull();
+      },
+      { timeout: 8000 },
+    );
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Saved" }));
@@ -1025,7 +1032,7 @@ describe("IssueFinder", () => {
     expect(screen.getByText(/repository metadata is partial/)).toBeTruthy();
   });
 
-  it("shows a friendly rate limit card with retry and sign-in actions", async () => {
+  it("shows a friendly rate limit card with retry action", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(
         response({
@@ -1048,13 +1055,19 @@ describe("IssueFinder", () => {
     expect(
       screen.getByText(/GitHub is temporarily limiting how many searches/),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Sign in for higher limits" }),
+      screen.getByText(/Please wait approximately 120 seconds/),
     ).toBeTruthy();
+    // The error card's Try again button should be disabled during cooldown
+    const errorCard = screen
+      .getByText("Too many requests: please wait")
+      .closest("[data-slot='card']")!;
+    const retryButton = errorCard.querySelector("button")!;
+    expect(retryButton.disabled).toBe(true);
+    expect(retryButton.textContent).toContain("Cooldown...");
   });
 
-  it("retries the search when the Try again button is clicked", async () => {
+  it("retries the search when the Try again button is clicked after cooldown", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(
@@ -1062,7 +1075,7 @@ describe("IssueFinder", () => {
           response({
             error: "GitHub API rate limit exceeded.",
             rateLimit: true,
-            retryAfter: 120,
+            retryAfter: 1,
           }),
           false,
         ) as any,
@@ -1073,14 +1086,35 @@ describe("IssueFinder", () => {
     fireEvent.submit(
       screen.getByRole("button", { name: "Search" }).closest("form")!,
     );
+
+    // Wait for the rate limit card to appear
     expect(
       await screen.findByText("Too many requests: please wait"),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Please wait approximately 1 seconds/),
+    ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    // Wait for the cooldown to expire and button to become enabled
+    await waitFor(
+      () => {
+        const errorCard = screen
+          .getByText("Too many requests: please wait")
+          .closest("[data-slot='card']")!;
+        const btn = errorCard.querySelector("button")!;
+        expect(btn.textContent).toContain("Try again");
+      },
+      { timeout: 3000 },
+    );
+
+    // Click the Try again button
+    const errorCard = screen
+      .getByText("Too many requests: please wait")
+      .closest("[data-slot='card']")!;
+    fireEvent.click(errorCard.querySelector("button")!);
     expect(
       await screen.findByRole("heading", { name: "Opportunities" }),
     ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
+  }, 10_000);
 });

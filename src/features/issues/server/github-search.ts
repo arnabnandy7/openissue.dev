@@ -383,7 +383,10 @@ async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
     const retryAfter = response.headers.get("retry-after");
     const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
 
-    if (response.status === 403 && isRateLimitResponse(body)) {
+    if (
+      (response.status === 403 || response.status === 429) &&
+      isRateLimitResponse(body)
+    ) {
       throw new RateLimitError(
         "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
         retryAfterSeconds,
@@ -488,7 +491,10 @@ export async function getRepositoryResponsiveness(
     const retryAfter = response.headers.get("retry-after");
     const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
 
-    if (response.status === 403 && isRateLimitResponse(body)) {
+    if (
+      (response.status === 403 || response.status === 429) &&
+      isRateLimitResponse(body)
+    ) {
       throw new RateLimitError(
         "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
         retryAfterSeconds,

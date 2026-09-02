@@ -536,6 +536,33 @@ describe("searchGitHubIssues", () => {
     });
   });
 
+  it("detects 429 responses as rate limit errors", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "secondary rate limit exceeded" }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json", "retry-after": "60" },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 60,
+    });
+  });
+
   it("returns an empty result when a topic has no matching repositories", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       jsonResponse({ total_count: 0, items: [] }),

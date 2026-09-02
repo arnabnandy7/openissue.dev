@@ -309,13 +309,13 @@ function SearchSummary({
   data,
   rateLimitInfo,
   onRetry,
-  isSignedIn,
+  cooldown,
 }: Readonly<{
   error: string | null;
   data: SearchResponse | null;
   rateLimitInfo: { retryAfter: number | null } | null;
   onRetry: () => void;
-  isSignedIn: boolean;
+  cooldown: boolean;
 }>) {
   return (
     <>
@@ -326,24 +326,16 @@ function SearchSummary({
             title="Too many requests: please wait"
             message="GitHub is temporarily limiting how many searches you can run. This usually resets in a few minutes."
             description={
-              isSignedIn
-                ? "You can try again shortly, or wait for the limit to reset."
-                : "You can try again shortly, or sign in with GitHub for higher rate limits."
+              rateLimitInfo.retryAfter
+                ? `Please wait approximately ${rateLimitInfo.retryAfter} seconds before retrying.`
+                : "You can try again shortly once the limit resets."
             }
             actions={[
-              { label: "Try again", onClick: onRetry },
-              ...(isSignedIn
-                ? []
-                : [
-                    {
-                      label: "Sign in for higher limits",
-                      onClick: () =>
-                        authClient.signIn.social({
-                          provider: "github",
-                          callbackURL: "/",
-                        }),
-                    },
-                  ]),
+              {
+                label: cooldown ? "Cooldown..." : "Try again",
+                onClick: onRetry,
+                disabled: cooldown,
+              },
             ]}
             technicalDetails={error}
           />
@@ -435,7 +427,7 @@ function RankedIssuesPanel({
   savedOpportunityUrls,
   rateLimitInfo,
   onRetry,
-  isSignedIn,
+  cooldown,
   onIssueOpen,
   onIssueSaveChange,
   onLoadMore,
@@ -449,7 +441,7 @@ function RankedIssuesPanel({
   savedOpportunityUrls: ReadonlySet<string>;
   rateLimitInfo: { retryAfter: number | null } | null;
   onRetry: () => void;
-  isSignedIn: boolean;
+  cooldown: boolean;
   onIssueOpen?: (issue: Issue) => void;
   onIssueSaveChange?: (issue: Issue, saved: boolean) => void;
   onLoadMore: () => void;
@@ -466,7 +458,7 @@ function RankedIssuesPanel({
         data={data}
         rateLimitInfo={rateLimitInfo}
         onRetry={onRetry}
-        isSignedIn={isSignedIn}
+        cooldown={cooldown}
       />
       <EnrichmentNotice data={data} />
       {isLoading ? <LoadingResults /> : null}
@@ -848,6 +840,33 @@ export function IssueFinder() {
   } | null>(null);
   const [cooldown, setCooldown] = useState(false);
   const searchRequestId = useRef(0);
+  const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleCooldown(seconds: number | null) {
+    if (cooldownTimeoutRef.current) {
+      clearTimeout(cooldownTimeoutRef.current);
+      cooldownTimeoutRef.current = null;
+    }
+
+    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) {
+      setCooldown(false);
+      return;
+    }
+
+    setCooldown(true);
+    cooldownTimeoutRef.current = setTimeout(() => {
+      setCooldown(false);
+      cooldownTimeoutRef.current = null;
+    }, seconds * 1000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savedSearchName, setSavedSearchName] = useState("");
@@ -1272,6 +1291,8 @@ export function IssueFinder() {
       readiness: searchReadiness,
     });
     const requestId = ++searchRequestId.current;
+    let retryAfterFromError: number | null = null;
+    let hadFailure = false;
 
     try {
       const response = await fetch(`/api/search?${params.toString()}`);
@@ -1304,6 +1325,8 @@ export function IssueFinder() {
     } catch (searchError) {
       if (requestId !== searchRequestId.current) return;
 
+      hadFailure = true;
+
       const message =
         searchError instanceof Error
           ? searchError.message
@@ -1318,15 +1341,21 @@ export function IssueFinder() {
           retryAfter?: number | null;
         };
         if (rateLimitError.rateLimit) {
-          setRateLimitInfo({ retryAfter: rateLimitError.retryAfter ?? null });
+          retryAfterFromError = rateLimitError.retryAfter ?? null;
+          setRateLimitInfo({ retryAfter: retryAfterFromError });
+          scheduleCooldown(retryAfterFromError ?? 3);
         }
       }
     } finally {
       if (requestId === searchRequestId.current) {
         setIsLoading(false);
-        setTimeout(() => {
+        if (hadFailure && retryAfterFromError === null) {
+          scheduleCooldown(3);
+        } else if (hadFailure) {
+          scheduleCooldown(retryAfterFromError);
+        } else {
           setCooldown(false);
-        }, 3000);
+        }
       }
     }
   }
@@ -1392,7 +1421,9 @@ export function IssueFinder() {
           retryAfter?: number | null;
         };
         if (rateLimitError.rateLimit) {
-          setRateLimitInfo({ retryAfter: rateLimitError.retryAfter ?? null });
+          const retryAfter = rateLimitError.retryAfter ?? null;
+          setRateLimitInfo({ retryAfter });
+          scheduleCooldown(retryAfter ?? 3);
         }
       }
     } finally {
@@ -1821,7 +1852,7 @@ export function IssueFinder() {
               savedOpportunityUrls={savedOpportunityUrls}
               rateLimitInfo={rateLimitInfo}
               onRetry={() => void searchIssues()}
-              isSignedIn={Boolean(session?.user.id)}
+              cooldown={cooldown}
               onIssueOpen={session?.user.id ? handleOpportunityOpen : undefined}
               onIssueSaveChange={
                 session?.user.id
