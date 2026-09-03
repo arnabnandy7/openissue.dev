@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render as testingLibraryRender,
@@ -100,12 +101,20 @@ vi.mock("@/features/issues/components/contribution-history", () => ({
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({ value, onValueChange, children }: any) => (
-    <div data-value={value} data-change={onValueChange ? "yes" : "no"}>{children}</div>
+    <div data-value={value} data-change={onValueChange ? "yes" : "no"}>
+      {children}
+    </div>
   ),
-  SelectTrigger: ({ children, ...props }: any) => <button type="button" {...props}>{children}</button>,
+  SelectTrigger: ({ children, ...props }: any) => (
+    <button type="button" {...props}>
+      {children}
+    </button>
+  ),
   SelectValue: ({ children }: any) => <span>{children}</span>,
   SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => <span data-value={value}>{children}</span>,
+  SelectItem: ({ children, value }: any) => (
+    <span data-value={value}>{children}</span>
+  ),
 }));
 
 import { IssueFinder } from "@/features/issues/components/issue-finder";
@@ -178,6 +187,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The main "Search" submit button and the ErrorCard's retry action can both
+// read "Cooldown..." while a rate-limit cooldown is active. Disambiguate by
+// button type: the retry action is type="button", the submit control isn't.
+function getRetryActionButton(name: string) {
+  return screen
+    .getAllByRole("button", { name })
+    .find(
+      (button) => (button as HTMLButtonElement).type === "button",
+    ) as HTMLButtonElement;
+}
+
 describe("IssueFinder", () => {
   it("defaults to results and mounts contribution history only after tab selection", () => {
     useSession.mockReturnValue({
@@ -188,21 +208,25 @@ describe("IssueFinder", () => {
     render(<IssueFinder />);
 
     expect(
-      screen.getByRole("tab", { name: "Opportunities" }).getAttribute(
-        "aria-selected",
-      ),
+      screen
+        .getByRole("tab", { name: "Opportunities" })
+        .getAttribute("aria-selected"),
     ).toBe("true");
-    expect(screen.queryByText("Contribution history", { selector: "div" })).toBeNull();
+    expect(
+      screen.queryByText("Contribution history", { selector: "div" }),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Workflow" }));
     expect(screen.getByText("Contribution workflow")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Contribution history" }));
-    expect(screen.getByText("Contribution history", { selector: "div" })).toBeTruthy();
     expect(
-      screen.getByRole("tab", { name: "Contribution history" }).getAttribute(
-        "aria-selected",
-      ),
+      screen.getByText("Contribution history", { selector: "div" }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("tab", { name: "Contribution history" })
+        .getAttribute("aria-selected"),
     ).toBe("true");
   });
 
@@ -293,8 +317,12 @@ describe("IssueFinder", () => {
       await screen.findByRole("button", { name: "Enable weekly digest" }),
     );
 
-    await waitFor(() => expect(updateDigestPreference).toHaveBeenCalledWith(true));
-    expect(screen.getByRole("button", { name: "Disable weekly digest" })).toBeTruthy();
+    await waitFor(() =>
+      expect(updateDigestPreference).toHaveBeenCalledWith(true),
+    );
+    expect(
+      screen.getByRole("button", { name: "Disable weekly digest" }),
+    ).toBeTruthy();
   });
 
   it("loads, saves, and clears the alternate alert email", async () => {
@@ -354,7 +382,9 @@ describe("IssueFinder", () => {
     );
 
     await waitFor(() => expect(triggerWeeklyDigest).toHaveBeenCalledOnce());
-    expect(await screen.findByText("Weekly digest sent. Check your inbox.")).toBeTruthy();
+    expect(
+      await screen.findByText("Weekly digest sent. Check your inbox."),
+    ).toBeTruthy();
   });
 
   it("validates and manages saved searches", async () => {
@@ -372,16 +402,30 @@ describe("IssueFinder", () => {
     addSavedSearch.mockReturnValue(saved);
 
     render(<IssueFinder />);
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
     expect(screen.getByText("Enter a name for the saved search.")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Saved search name"), { target: { value: "React bugs" } });
-    fireEvent.change(screen.getByLabelText("Technology"), { target: { value: "   " } });
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
-    expect(screen.getByText("Enter a technology before saving the search.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Saved search name"), {
+      target: { value: "React bugs" },
+    });
+    fireEvent.change(screen.getByLabelText("Technology"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
+    expect(
+      screen.getByText("Enter a technology before saving the search."),
+    ).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Technology"), { target: { value: "React" } });
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
+    fireEvent.change(screen.getByLabelText("Technology"), {
+      target: { value: "React" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
     expect(addSavedSearch).toHaveBeenCalled();
     expect(screen.getByText("React bugs")).toBeTruthy();
 
@@ -394,8 +438,12 @@ describe("IssueFinder", () => {
       throw new Error("Storage unavailable");
     });
     render(<IssueFinder />);
-    fireEvent.change(screen.getByLabelText("Saved search name"), { target: { value: "Java" } });
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
+    fireEvent.change(screen.getByLabelText("Saved search name"), {
+      target: { value: "Java" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
     expect(screen.getByText("Storage unavailable")).toBeTruthy();
   });
 
@@ -423,7 +471,9 @@ describe("IssueFinder", () => {
     fireEvent.change(screen.getByLabelText("Saved search name"), {
       target: { value: "Java" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
 
     expect(
       await screen.findByText("Search saved locally, but account sync failed."),
@@ -466,15 +516,14 @@ describe("IssueFinder", () => {
     fireEvent.change(screen.getByLabelText("Saved search name"), {
       target: { value: "Java" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /save current search/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save current search/i }),
+    );
 
     await waitFor(() =>
       expect(syncSavedSearches).toHaveBeenLastCalledWith([olderSearch, saved]),
     );
-    expect(replaceSavedSearches).toHaveBeenLastCalledWith([
-      olderSearch,
-      saved,
-    ]);
+    expect(replaceSavedSearches).toHaveBeenLastCalledWith([olderSearch, saved]);
   });
 
   it("removes an authenticated search from cloud and local storage", async () => {
@@ -496,9 +545,13 @@ describe("IssueFinder", () => {
     syncSavedSearches.mockResolvedValue([saved]);
 
     render(<IssueFinder />);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete React bugs" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete React bugs" }),
+    );
 
-    await waitFor(() => expect(deleteCloudSavedSearch).toHaveBeenCalledWith("saved-1"));
+    await waitFor(() =>
+      expect(deleteCloudSavedSearch).toHaveBeenCalledWith("saved-1"),
+    );
     expect(deleteSavedSearch).toHaveBeenCalledWith("saved-1");
   });
 
@@ -522,7 +575,9 @@ describe("IssueFinder", () => {
     deleteCloudSavedSearch.mockRejectedValue(new Error("Cloud unavailable"));
 
     render(<IssueFinder />);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete React bugs" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete React bugs" }),
+    );
 
     expect(await screen.findByText("Cloud unavailable")).toBeTruthy();
     expect(deleteSavedSearch).not.toHaveBeenCalled();
@@ -533,13 +588,19 @@ describe("IssueFinder", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(response()) as any)
       .mockResolvedValueOnce(
-        jsonResponse(response({ issues: [issue(25, 99)], page: 2, candidateCount: 25 })) as any,
+        jsonResponse(
+          response({ issues: [issue(25, 99)], page: 2, candidateCount: 25 }),
+        ) as any,
       );
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
 
-    expect(await screen.findByRole("heading", { name: "Opportunities" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Opportunities" }),
+    ).toBeTruthy();
     expect(screen.getByText("Issue 24")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Load More" }));
     expect(await screen.findByText("Issue 25")).toBeTruthy();
@@ -577,7 +638,9 @@ describe("IssueFinder", () => {
     });
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Saved" }));
@@ -597,15 +660,26 @@ describe("IssueFinder", () => {
   it("handles empty searches and API failures", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<IssueFinder />);
-    fireEvent.change(screen.getByLabelText("Technology"), { target: { value: " " } });
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.change(screen.getByLabelText("Technology"), {
+      target: { value: " " },
+    });
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     expect(screen.getByText("Enter a technology to search.")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Technology"), { target: { value: "Rust" } });
+    fireEvent.change(screen.getByLabelText("Technology"), {
+      target: { value: "Rust" },
+    });
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(response({ issues: [], candidateCount: 0, error: "No access" }), false) as any,
+      jsonResponse(
+        response({ issues: [], candidateCount: 0, error: "No access" }),
+        false,
+      ) as any,
     );
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     expect(await screen.findByText("No access")).toBeTruthy();
 
     await waitFor(() =>
@@ -615,9 +689,17 @@ describe("IssueFinder", () => {
 
   it("updates every quick technology and supported label", () => {
     render(<IssueFinder />);
-    for (const technology of ["Spring Boot", "React", "Python", "Kubernetes", "Java"]) {
+    for (const technology of [
+      "Spring Boot",
+      "React",
+      "Python",
+      "Kubernetes",
+      "Java",
+    ]) {
       fireEvent.click(screen.getByRole("button", { name: technology }));
-      expect((screen.getByLabelText("Technology") as HTMLInputElement).value).toBe(technology);
+      expect(
+        (screen.getByLabelText("Technology") as HTMLInputElement).value,
+      ).toBe(technology);
     }
     for (const label of [
       "help wanted",
@@ -665,7 +747,9 @@ describe("IssueFinder", () => {
       .mockResolvedValueOnce(jsonResponse(response()) as any)
       .mockRejectedValueOnce("offline");
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     await screen.findByText("Opportunities");
     fireEvent.click(screen.getByRole("button", { name: "Load More" }));
     expect(await screen.findByText("Failed to load more issues.")).toBeTruthy();
@@ -674,7 +758,9 @@ describe("IssueFinder", () => {
   it("shows an unknown token status until a successful search reports it", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(response({ tokenConfigured: true })) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(response({ tokenConfigured: true })) as any,
+      )
       .mockResolvedValueOnce(
         jsonResponse(response({ error: "Search failed" }), false) as any,
       );
@@ -682,12 +768,16 @@ describe("IssueFinder", () => {
     render(<IssueFinder />);
     expect(screen.getByText("unknown")).toBeTruthy();
 
-    const form = screen.getByRole("button", { name: "Search" }).closest("form")!;
+    const form = screen
+      .getByRole("button", { name: "Search" })
+      .closest("form")!;
     fireEvent.submit(form);
     expect(await screen.findByText("configured")).toBeTruthy();
 
     fireEvent.submit(form);
-    expect((await screen.findAllByText("Search failed")).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText("Search failed")).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("configured")).toBeTruthy();
   });
 
@@ -696,7 +786,9 @@ describe("IssueFinder", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(response()) as any)
       .mockResolvedValueOnce(
-        jsonResponse(response({ issues: [issue(25)], page: 2, candidateCount: 25 })) as any,
+        jsonResponse(
+          response({ issues: [issue(25)], page: 2, candidateCount: 25 }),
+        ) as any,
       );
     const pushState = vi.spyOn(window.history, "pushState");
 
@@ -704,7 +796,9 @@ describe("IssueFinder", () => {
     fireEvent.change(screen.getByLabelText("Technology"), {
       target: { value: "Rust" },
     });
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
 
     await screen.findByRole("heading", { name: "Opportunities" });
     expect(window.location.search).toContain("tech=Rust");
@@ -716,9 +810,9 @@ describe("IssueFinder", () => {
   });
 
   it("restores validated filters during browser navigation", async () => {
-    const fetchMock = vi.mocked(fetch).mockResolvedValue(
-      jsonResponse(response()) as any,
-    );
+    const fetchMock = vi
+      .mocked(fetch)
+      .mockResolvedValue(jsonResponse(response()) as any);
     window.history.replaceState(
       null,
       "",
@@ -735,7 +829,9 @@ describe("IssueFinder", () => {
     window.history.pushState(null, "", "/");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(await screen.findByText("Ready when you are")).toBeTruthy();
-    expect((screen.getByLabelText("Technology") as HTMLInputElement).value).toBe("Java");
+    expect(
+      (screen.getByLabelText("Technology") as HTMLInputElement).value,
+    ).toBe("Java");
   });
 
   it("ignores a stale search after navigation clears the URL", async () => {
@@ -768,10 +864,12 @@ describe("IssueFinder", () => {
         }) as any,
       )
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          query: "is:issue language:Go",
-          issues: [issue(50)],
-        })) as any,
+        jsonResponse(
+          response({
+            query: "is:issue language:Go",
+            issues: [issue(50)],
+          }),
+        ) as any,
       );
     window.history.replaceState(null, "", "/?tech=Rust");
 
@@ -789,17 +887,21 @@ describe("IssueFinder", () => {
 
   it("warns when optional GitHub enrichment is incomplete", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse(response({
-        enrichment: {
-          repositoryMetadata: "partial",
-          discussionAnalysis: "unavailable",
-          linkedPullRequests: "complete",
-        },
-      })) as any,
+      jsonResponse(
+        response({
+          enrichment: {
+            repositoryMetadata: "partial",
+            discussionAnalysis: "unavailable",
+            linkedPullRequests: "complete",
+          },
+        }),
+      ) as any,
     );
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
 
     expect(
       await screen.findByText("Some ranking details are unavailable"),
@@ -811,28 +913,34 @@ describe("IssueFinder", () => {
   it("retains incomplete enrichment warnings across loaded pages", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          enrichment: {
-            repositoryMetadata: "partial",
-            discussionAnalysis: "complete",
-            linkedPullRequests: "complete",
-          },
-        })) as any,
+        jsonResponse(
+          response({
+            enrichment: {
+              repositoryMetadata: "partial",
+              discussionAnalysis: "complete",
+              linkedPullRequests: "complete",
+            },
+          }),
+        ) as any,
       )
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          issues: [issue(25)],
-          page: 2,
-          enrichment: {
-            repositoryMetadata: "complete",
-            discussionAnalysis: "complete",
-            linkedPullRequests: "complete",
-          },
-        })) as any,
+        jsonResponse(
+          response({
+            issues: [issue(25)],
+            page: 2,
+            enrichment: {
+              repositoryMetadata: "complete",
+              discussionAnalysis: "complete",
+              linkedPullRequests: "complete",
+            },
+          }),
+        ) as any,
       );
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     expect(
       await screen.findByText(/repository metadata is partial/),
     ).toBeTruthy();
@@ -845,28 +953,34 @@ describe("IssueFinder", () => {
   it("keeps the least available enrichment status from a later page", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          enrichment: {
-            repositoryMetadata: "complete",
-            discussionAnalysis: "complete",
-            linkedPullRequests: "complete",
-          },
-        })) as any,
+        jsonResponse(
+          response({
+            enrichment: {
+              repositoryMetadata: "complete",
+              discussionAnalysis: "complete",
+              linkedPullRequests: "complete",
+            },
+          }),
+        ) as any,
       )
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          issues: [issue(25)],
-          page: 2,
-          enrichment: {
-            repositoryMetadata: "unavailable",
-            discussionAnalysis: "partial",
-            linkedPullRequests: "complete",
-          },
-        })) as any,
+        jsonResponse(
+          response({
+            issues: [issue(25)],
+            page: 2,
+            enrichment: {
+              repositoryMetadata: "unavailable",
+              discussionAnalysis: "partial",
+              linkedPullRequests: "complete",
+            },
+          }),
+        ) as any,
       );
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     await screen.findByRole("heading", { name: "Opportunities" });
     expect(
       screen.queryByText("Some ranking details are unavailable"),
@@ -883,28 +997,34 @@ describe("IssueFinder", () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(response()) as any)
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          issues: Array.from({ length: 24 }, (_, index) => issue(index + 25)),
-          page: 2,
-          candidateCount: 50,
-          enrichment: {
-            repositoryMetadata: "partial",
-            discussionAnalysis: "complete",
-            linkedPullRequests: "complete",
-          },
-        })) as any,
+        jsonResponse(
+          response({
+            issues: Array.from({ length: 24 }, (_, index) => issue(index + 25)),
+            page: 2,
+            candidateCount: 50,
+            enrichment: {
+              repositoryMetadata: "partial",
+              discussionAnalysis: "complete",
+              linkedPullRequests: "complete",
+            },
+          }),
+        ) as any,
       )
       .mockResolvedValueOnce(
-        jsonResponse(response({
-          issues: [issue(49)],
-          page: 3,
-          candidateCount: 50,
-          enrichment: undefined,
-        })) as any,
+        jsonResponse(
+          response({
+            issues: [issue(49)],
+            page: 3,
+            candidateCount: 50,
+            enrichment: undefined,
+          }),
+        ) as any,
       );
 
     render(<IssueFinder />);
-    fireEvent.submit(screen.getByRole("button", { name: "Search" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
     await screen.findByRole("heading", { name: "Opportunities" });
 
     fireEvent.click(screen.getByRole("button", { name: "Load More" }));
@@ -915,5 +1035,261 @@ describe("IssueFinder", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load More" }));
     await screen.findByText("Issue 49");
     expect(screen.getByText(/repository metadata is partial/)).toBeTruthy();
+  });
+
+  it("shows a friendly rate limit card with the retry duration and a disabled retry action", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        response({
+          error: "GitHub API rate limit exceeded.",
+          rateLimit: true,
+          retryAfter: 120,
+        }),
+        false,
+      ) as any,
+    );
+
+    render(<IssueFinder />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
+
+    expect(
+      await screen.findByText("Too many requests: please wait"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/GitHub is temporarily limiting how many searches/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Please wait approximately 120 seconds before retrying.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "Sign in for higher limits" }),
+    ).toBeNull();
+  });
+
+  it("uses a one-minute fallback cooldown when no retry duration is available", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        response({
+          error: "GitHub API rate limit exceeded.",
+          rateLimit: true,
+          retryAfter: null,
+        }),
+        false,
+      ) as any,
+    );
+
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(
+        screen.getByText("Please wait a few minutes before trying again."),
+      ).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(59_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps retry disabled until the API-provided cooldown expires, then retries", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: 120,
+          }),
+          false,
+        ) as any,
+      )
+      .mockResolvedValueOnce(jsonResponse(response()) as any);
+
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
+
+      // Flush the pending fetch promise and the resulting state update.
+      // Using vi.advanceTimersByTimeAsync (instead of findBy/waitFor, which
+      // poll with real timers) keeps everything on the fake-timer clock so
+      // the test can't hang and leak fake timers into later tests.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByText("Too many requests: please wait")).toBeTruthy();
+      const retryButton = getRetryActionButton("Cooldown...");
+      expect(retryButton.disabled).toBe(true);
+
+      // Not enough time has passed yet: still disabled.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      // The full retry-after window has elapsed: the button becomes usable.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      const enabledRetryButton = screen.getByRole("button", {
+        name: "Try again",
+      }) as HTMLButtonElement;
+      expect(enabledRetryButton.disabled).toBe(false);
+
+      fireEvent.click(enabledRetryButton);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(
+        screen.getByRole("heading", { name: "Opportunities" }),
+      ).toBeTruthy();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries the failed page instead of restarting the search after a rate-limited pagination failure", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: 0,
+          }),
+          false,
+        ) as any,
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({ issues: [issue(25)], page: 2, candidateCount: 25 }),
+        ) as any,
+      );
+
+    render(<IssueFinder />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
+    await screen.findByText("Opportunities");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load More" }));
+    expect(
+      await screen.findByText("Too many requests: please wait"),
+    ).toBeTruthy();
+
+    // retryAfter: 0 means the cooldown clears almost immediately.
+    await waitFor(() => {
+      const retryButton = screen.getByRole(
+        "button",
+        { name: "Try again" },
+      ) as HTMLButtonElement;
+      expect(retryButton.disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Issue 25")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // The retry continues the failed page rather than restarting at page 1.
+    expect(String(fetchMock.mock.calls[2][0])).toContain("page=2");
+  });
+
+  it("does not let an earlier search cooldown shorten a pagination rate-limit cooldown", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: 120,
+          }),
+          false,
+        ) as any,
+      );
+
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Load More" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the default cooldown when a rate-limited pagination failure has no retry-after", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: null,
+          }),
+          false,
+        ) as any,
+      );
+
+    render(<IssueFinder />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
+    await screen.findByText("Opportunities");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load More" }));
+
+    expect(
+      await screen.findByText("Please wait a few minutes before trying again."),
+    ).toBeTruthy();
+    expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
   });
 });
