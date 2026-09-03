@@ -1061,6 +1061,102 @@ function IssueFinderSidebar({
   );
 }
 
+function getSelectedContentTab(activeTab: ContentTab, authenticated: boolean) {
+  return authenticated ? activeTab : "results";
+}
+
+function getTokenStatus(data: SearchResponse | null) {
+  if (!data) return "unknown";
+  return data.tokenConfigured ? "configured" : "not set";
+}
+
+function getRetryHandler(
+  errorSource: "search" | "loadMore" | null,
+  search: () => void,
+  loadMore: () => void,
+) {
+  return errorSource === "loadMore" ? loadMore : search;
+}
+
+function getOpportunityCallbacks(
+  authenticated: boolean,
+  onOpen: (issue: Issue) => void,
+  onSaveChange: (issue: Issue, saved: boolean) => void,
+) {
+  if (!authenticated) return {};
+  return { onIssueOpen: onOpen, onIssueSaveChange: onSaveChange };
+}
+
+function SearchSubmitButton({
+  isLoading,
+  cooldown,
+}: Readonly<{ isLoading: boolean; cooldown: boolean }>) {
+  const label = cooldown && !isLoading ? "Cooldown..." : "Search";
+
+  return (
+    <Button
+      type="submit"
+      className="h-11 w-full gap-2 sm:col-span-2 lg:col-span-1"
+      disabled={isLoading || cooldown}
+    >
+      <Search className="h-4 w-4" />
+      {label}
+    </Button>
+  );
+}
+
+function SearchOverview({
+  label,
+  sort,
+  linkedPr,
+  hacktoberfest,
+  experience,
+  contributionType,
+  scope,
+  responsiveness,
+  data,
+  tokenStatus,
+}: Readonly<{
+  label: string;
+  sort: string;
+  linkedPr: string;
+  hacktoberfest: string;
+  experience: string;
+  contributionType: string;
+  scope: string;
+  responsiveness: string;
+  data: SearchResponse | null;
+  tokenStatus: string;
+}>) {
+  return (
+    <Card className="self-end">
+      <CardHeader>
+        <CardTitle className="text-base">Search overview</CardTitle>
+        <CardDescription>Current filters and GitHub search coverage.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3 text-sm">
+        <Metric label="Label" value={label} />
+        <Metric label="Sort" value={sort === "created" ? "newest" : sort} />
+        <Metric label="Linked PR" value={linkedPr.replace("Linked PR: ", "")} />
+        <Metric label="Hacktoberfest" value={hacktoberfest} />
+        <Metric label="Experience" value={experience} />
+        <Metric label="Type" value={contributionType} />
+        <Metric label="Scope" value={scope} />
+        <Metric label="Responsiveness" value={responsiveness} />
+        <Metric
+          label="Ranked"
+          value={data ? compactNumber(data.candidateCount) : "-"}
+        />
+        <Metric
+          label="Raw GitHub matches"
+          value={data ? compactNumber(data.totalCount) : "-"}
+        />
+        <Metric label="GitHub token" value={tokenStatus} />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function IssueFinder() {
   const { data: session, isPending: isSessionPending } =
     authClient.useSession();
@@ -1110,7 +1206,11 @@ export function IssueFinder() {
   const [opportunityRevision, setOpportunityRevision] = useState(0);
   const [activeContentTab, setActiveContentTab] =
     useState<ContentTab>("results");
-  const selectedContentTab = session?.user.id ? activeContentTab : "results";
+  const authenticated = Boolean(session?.user.id);
+  const selectedContentTab = getSelectedContentTab(
+    activeContentTab,
+    authenticated,
+  );
 
   useEffect(() => {
     // Hydration must start with the server's empty snapshot before reading browser storage.
@@ -1647,15 +1747,17 @@ export function IssueFinder() {
     }
   }
 
-  let tokenStatus = "unknown";
-  if (data) {
-    tokenStatus = data.tokenConfigured ? "configured" : "not set";
-  }
-
-  const handleRetry =
-    errorSource === "loadMore"
-      ? () => void loadMoreIssues()
-      : () => void searchIssues();
+  const tokenStatus = getTokenStatus(data);
+  const handleRetry = getRetryHandler(
+    errorSource,
+    () => void searchIssues(),
+    () => void loadMoreIssues(),
+  );
+  const opportunityCallbacks = getOpportunityCallbacks(
+    authenticated,
+    handleOpportunityOpen,
+    (selectedIssue, saved) => void handleOpportunitySave(selectedIssue, saved),
+  );
 
   return (
     <main className="min-h-screen bg-background">
@@ -1865,56 +1967,22 @@ export function IssueFinder() {
                 </SelectContent>
               </Select>
 
-              <Button
-                type="submit"
-                className="h-11 w-full gap-2 sm:col-span-2 lg:col-span-1"
-                disabled={isLoading || cooldown}
-              >
-                <Search className="h-4 w-4" />
-                {cooldown && !isLoading ? "Cooldown..." : "Search"}
-              </Button>
+              <SearchSubmitButton isLoading={isLoading} cooldown={cooldown} />
             </form>
           </div>
 
-          <Card className="self-end">
-            <CardHeader>
-              <CardTitle className="text-base">Search overview</CardTitle>
-              <CardDescription>
-                Current filters and GitHub search coverage.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
-              <Metric label="Label" value={selectedLabel.label} />
-              <Metric
-                label="Sort"
-                value={sort === "created" ? "newest" : sort}
-              />
-              <Metric
-                label="Linked PR"
-                value={selectedLinkedPr.label.replace("Linked PR: ", "")}
-              />
-              <Metric
-                label="Hacktoberfest"
-                value={selectedHacktoberfest.label}
-              />
-              <Metric label="Experience" value={selectedExperience.label} />
-              <Metric label="Type" value={selectedContributionType.label} />
-              <Metric label="Scope" value={selectedScope.label} />
-              <Metric
-                label="Responsiveness"
-                value={selectedResponsiveness.label}
-              />
-              <Metric
-                label="Ranked"
-                value={data ? compactNumber(data.candidateCount) : "-"}
-              />
-              <Metric
-                label="Raw GitHub matches"
-                value={data ? compactNumber(data.totalCount) : "-"}
-              />
-              <Metric label="GitHub token" value={tokenStatus} />
-            </CardContent>
-          </Card>
+          <SearchOverview
+            label={selectedLabel.label}
+            sort={sort}
+            linkedPr={selectedLinkedPr.label}
+            hacktoberfest={selectedHacktoberfest.label}
+            experience={selectedExperience.label}
+            contributionType={selectedContributionType.label}
+            scope={selectedScope.label}
+            responsiveness={selectedResponsiveness.label}
+            data={data}
+            tokenStatus={tokenStatus}
+          />
         </div>
       </section>
 
@@ -1923,7 +1991,7 @@ export function IssueFinder() {
           tech={tech}
           savedSearchName={savedSearchName}
           savedSearches={savedSearches}
-          authenticated={Boolean(session?.user.id)}
+          authenticated={authenticated}
           linkedEmail={session?.user.email}
           alertEmail={alertEmail}
           digestEnabled={digestEnabled}
@@ -1943,7 +2011,7 @@ export function IssueFinder() {
 
         <IssueContentTabs
           activeTab={selectedContentTab}
-          authenticated={Boolean(session?.user.id)}
+          authenticated={authenticated}
           contributionRevision={opportunityRevision}
           onTabChange={setActiveContentTab}
           rankedIssuesPanel={
@@ -1958,13 +2026,7 @@ export function IssueFinder() {
               rateLimitInfo={rateLimitInfo}
               onRetry={handleRetry}
               cooldown={cooldown}
-              onIssueOpen={session?.user.id ? handleOpportunityOpen : undefined}
-              onIssueSaveChange={
-                session?.user.id
-                  ? (selectedIssue, saved) =>
-                      void handleOpportunitySave(selectedIssue, saved)
-                  : undefined
-              }
+              {...opportunityCallbacks}
               onLoadMore={() => void loadMoreIssues()}
             />
           }
