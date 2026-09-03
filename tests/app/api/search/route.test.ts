@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { searchGitHubIssues, headersMock } = vi.hoisted(() => ({
+const { searchGitHubIssues, headersMock, isRateLimitErrorMock } = vi.hoisted(() => ({
   searchGitHubIssues: vi.fn(),
   headersMock: vi.fn(async () => new Headers({ "x-forwarded-for": "203.0.113.10" })),
+  isRateLimitErrorMock: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -11,6 +12,7 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/features/issues/server/github-search", () => ({
   searchGitHubIssues,
+  isRateLimitError: isRateLimitErrorMock,
 }));
 
 describe("GET /api/search", () => {
@@ -25,6 +27,8 @@ describe("GET /api/search", () => {
       issues: [],
       page: 1,
     });
+    isRateLimitErrorMock.mockReset();
+    isRateLimitErrorMock.mockReturnValue(false);
     headersMock.mockResolvedValue(new Headers({ "x-forwarded-for": "203.0.113.10" }));
   });
 
@@ -73,6 +77,22 @@ describe("GET /api/search", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe("GitHub is unavailable");
+  });
+
+  it("returns a rate limit error with rateLimit flag and retryAfter", async () => {
+    const rateLimitError = new Error("GitHub API rate limit exceeded.");
+    Object.assign(rateLimitError, { retryAfterSeconds: 120 });
+    isRateLimitErrorMock.mockReturnValueOnce(true);
+    searchGitHubIssues.mockRejectedValueOnce(rateLimitError);
+    const { GET } = await import("@/app/api/search/route");
+
+    const response = await GET(new Request("http://localhost/api/search?tech=React"));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.rateLimit).toBe(true);
+    expect(body.retryAfter).toBe(120);
+    expect(body.error).toContain("rate limit");
   });
 
   it("rate limits repeated requests from one IP", async () => {

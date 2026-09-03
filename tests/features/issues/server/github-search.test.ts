@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getRecentRepositoryIssues,
+  getRepositoryResponsiveness,
   searchGitHubIssues,
   searchGitHubRepositories,
 } from "@/features/issues/server/github-search";
@@ -507,6 +508,241 @@ describe("searchGitHubIssues", () => {
         linkedPr: null,
       }),
     ).rejects.toThrow("GitHub API error 403: forbidden");
+  });
+
+  it("detects rate limit errors and throws RateLimitError", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json", "retry-after": "120" },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 120,
+    });
+  });
+
+  it("detects 429 responses as rate limit errors", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            message: "You have exceeded a secondary rate limit.",
+          }),
+          {
+            status: 429,
+            headers: {
+              "content-type": "application/json",
+              "retry-after": "120",
+            },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 120,
+    });
+  });
+
+  it("falls back to x-ratelimit-reset when retry-after is absent", async () => {
+    // beforeEach pins "now" to 2026-06-26T12:00:00.000Z (epoch 1782043200).
+    const resetEpochSeconds = Math.floor(Date.now() / 1000) + 90;
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/json",
+              "x-ratelimit-reset": String(resetEpochSeconds),
+            },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 90,
+    });
+  });
+
+  it("leaves retryAfterSeconds null when neither retry-after nor x-ratelimit-reset is present", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: null,
+    });
+  });
+
+  it("ignores a malformed retry-after header and falls back to x-ratelimit-reset", async () => {
+    const resetEpochSeconds = Math.floor(Date.now() / 1000) + 45;
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/json",
+              "retry-after": "not-a-number",
+              "x-ratelimit-reset": String(resetEpochSeconds),
+            },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 45,
+    });
+  });
+
+  it("leaves retryAfterSeconds null when x-ratelimit-reset is malformed too", async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "API rate limit exceeded for user" }),
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/json",
+              "x-ratelimit-reset": "not-a-number",
+            },
+          },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      searchGitHubIssues({
+        tech: "Java",
+        label: null,
+        sort: null,
+        linkedPr: null,
+      }),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: null,
+    });
+  });
+
+  it("detects GraphQL 403 rate limit responses when scoring repository responsiveness", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: "You have exceeded a secondary rate limit.",
+        }),
+        {
+          status: 403,
+          headers: { "content-type": "application/json", "retry-after": "30" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getRepositoryResponsiveness("acme/widgets", "test-token"),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 30,
+    });
+  });
+
+  it("detects GraphQL 429 rate limit responses when scoring repository responsiveness", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: "You have exceeded a secondary rate limit.",
+        }),
+        {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "45" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getRepositoryResponsiveness("acme/widgets", "test-token"),
+    ).rejects.toMatchObject({
+      name: "RateLimitError",
+      retryAfterSeconds: 45,
+    });
+  });
+
+  it("surfaces non-rate-limit GraphQL errors generically", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("service unavailable", { status: 503 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getRepositoryResponsiveness("acme/widgets", "test-token"),
+    ).rejects.toThrow("GitHub GraphQL error 503");
   });
 
   it("returns an empty result when a topic has no matching repositories", async () => {

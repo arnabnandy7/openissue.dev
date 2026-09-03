@@ -100,6 +100,8 @@ export type SearchResponse = {
   page: number;
   enrichment?: SearchEnrichment;
   error?: string;
+  rateLimit?: boolean;
+  retryAfter?: number | null;
 };
 
 export type GitHubLabel = {
