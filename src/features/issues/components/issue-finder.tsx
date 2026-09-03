@@ -85,6 +85,7 @@ import { getRecommendations } from "@/features/issues/lib/recommendation-cloud";
 import type { RecommendationResponse } from "@/features/issues/types/recommendation";
 
 const SEARCH_COOLDOWN_MS = 3000;
+const RATE_LIMIT_FALLBACK_COOLDOWN_MS = 60_000;
 
 type SearchFilters = {
   tech: string;
@@ -845,6 +846,7 @@ export function IssueFinder() {
     null,
   );
   const searchRequestId = useRef(0);
+  const cooldownTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savedSearchName, setSavedSearchName] = useState("");
@@ -865,6 +867,27 @@ export function IssueFinder() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSavedSearches(getSavedSearches());
   }, []);
+
+  useEffect(
+    () => () => {
+      if (cooldownTimeoutId.current) {
+        clearTimeout(cooldownTimeoutId.current);
+      }
+    },
+    [],
+  );
+
+  function scheduleCooldownEnd(durationMs: number) {
+    if (cooldownTimeoutId.current) {
+      clearTimeout(cooldownTimeoutId.current);
+    }
+
+    setCooldown(true);
+    cooldownTimeoutId.current = setTimeout(() => {
+      setCooldown(false);
+      cooldownTimeoutId.current = null;
+    }, durationMs);
+  }
 
   useEffect(() => {
     function restoreSearch() {
@@ -1324,15 +1347,13 @@ export function IssueFinder() {
           cooldownDurationMs =
             retryAfterFromError !== null
               ? retryAfterFromError * 1000
-              : SEARCH_COOLDOWN_MS;
+              : RATE_LIMIT_FALLBACK_COOLDOWN_MS;
         }
       }
     } finally {
       if (requestId === searchRequestId.current) {
         setIsLoading(false);
-        setTimeout(() => {
-          setCooldown(false);
-        }, cooldownDurationMs);
+        scheduleCooldownEnd(cooldownDurationMs);
       }
     }
   }
@@ -1406,16 +1427,13 @@ export function IssueFinder() {
           rateLimitCooldownMs =
             retryAfterFromError !== null
               ? retryAfterFromError * 1000
-              : SEARCH_COOLDOWN_MS;
-          setCooldown(true);
+              : RATE_LIMIT_FALLBACK_COOLDOWN_MS;
         }
       }
     } finally {
       setIsLoadingMore(false);
       if (rateLimitCooldownMs !== null) {
-        setTimeout(() => {
-          setCooldown(false);
-        }, rateLimitCooldownMs);
+        scheduleCooldownEnd(rateLimitCooldownMs);
       }
     }
   }

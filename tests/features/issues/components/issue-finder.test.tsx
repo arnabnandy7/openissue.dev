@@ -1072,7 +1072,7 @@ describe("IssueFinder", () => {
     ).toBeNull();
   });
 
-  it("shows a fallback message when no retry duration is available", async () => {
+  it("uses a one-minute fallback cooldown when no retry duration is available", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(
         response({
@@ -1084,14 +1084,33 @@ describe("IssueFinder", () => {
       ) as any,
     );
 
-    render(<IssueFinder />);
-    fireEvent.submit(
-      screen.getByRole("button", { name: "Search" }).closest("form")!,
-    );
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
 
-    expect(
-      await screen.findByText("Please wait a few minutes before trying again."),
-    ).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(
+        screen.getByText("Please wait a few minutes before trying again."),
+      ).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(59_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps retry disabled until the API-provided cooldown expires, then retries", async () => {
@@ -1204,6 +1223,45 @@ describe("IssueFinder", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     // The retry continues the failed page rather than restarting at page 1.
     expect(String(fetchMock.mock.calls[2][0])).toContain("page=2");
+  });
+
+  it("does not let an earlier search cooldown shorten a pagination rate-limit cooldown", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: 120,
+          }),
+          false,
+        ) as any,
+      );
+
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Load More" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("falls back to the default cooldown when a rate-limited pagination failure has no retry-after", async () => {
