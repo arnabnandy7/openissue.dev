@@ -87,6 +87,42 @@ import type { RecommendationResponse } from "@/features/issues/types/recommendat
 const SEARCH_COOLDOWN_MS = 3000;
 const RATE_LIMIT_FALLBACK_COOLDOWN_MS = 60_000;
 
+type SearchApiError = Error & {
+  rateLimit?: boolean;
+  retryAfter?: number | null;
+};
+
+function createSearchApiError(payload: SearchResponse, fallback: string) {
+  const error = new Error(payload.error ?? fallback) as SearchApiError;
+
+  if (payload.rateLimit) {
+    error.rateLimit = true;
+    error.retryAfter = payload.retryAfter ?? null;
+  }
+
+  return error;
+}
+
+function getRateLimitDetails(error: unknown) {
+  if (!(error instanceof Error) || !("rateLimit" in error)) return null;
+
+  const rateLimitError = error as SearchApiError;
+  if (!rateLimitError.rateLimit) return null;
+
+  const retryAfter = rateLimitError.retryAfter ?? null;
+  return {
+    retryAfter,
+    cooldownMs:
+      retryAfter === null
+        ? RATE_LIMIT_FALLBACK_COOLDOWN_MS
+        : retryAfter * 1000,
+  };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 type SearchFilters = {
   tech: string;
   label: string;
@@ -320,37 +356,43 @@ function SearchSummary({
   onRetry: () => void;
   cooldown: boolean;
 }>) {
+  let errorCard: ReactNode = null;
+
+  if (error && rateLimitInfo) {
+    errorCard = (
+      <ErrorCard
+        variant="warning"
+        title="Too many requests: please wait"
+        message="GitHub is temporarily limiting how many searches you can run. This usually resets in a few minutes."
+        description={
+          rateLimitInfo.retryAfter
+            ? `Please wait approximately ${rateLimitInfo.retryAfter} seconds before retrying.`
+            : "Please wait a few minutes before trying again."
+        }
+        actions={[
+          {
+            label: cooldown ? "Cooldown..." : "Try again",
+            onClick: onRetry,
+            disabled: cooldown,
+          },
+        ]}
+        technicalDetails={error}
+      />
+    );
+  } else if (error) {
+    errorCard = (
+      <ErrorCard
+        variant="error"
+        title="Search failed"
+        message={error}
+        actions={[{ label: "Try again", onClick: onRetry }]}
+      />
+    );
+  }
+
   return (
     <>
-      {error ? (
-        rateLimitInfo ? (
-          <ErrorCard
-            variant="warning"
-            title="Too many requests: please wait"
-            message="GitHub is temporarily limiting how many searches you can run. This usually resets in a few minutes."
-            description={
-              rateLimitInfo.retryAfter
-                ? `Please wait approximately ${rateLimitInfo.retryAfter} seconds before retrying.`
-                : "Please wait a few minutes before trying again."
-            }
-            actions={[
-              {
-                label: cooldown ? "Cooldown..." : "Try again",
-                onClick: onRetry,
-                disabled: cooldown,
-              },
-            ]}
-            technicalDetails={error}
-          />
-        ) : (
-          <ErrorCard
-            variant="error"
-            title="Search failed"
-            message={error}
-            actions={[{ label: "Try again", onClick: onRetry }]}
-          />
-        )
-      ) : null}
+      {errorCard}
       {data ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -577,7 +619,7 @@ function RecommendationsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repositoryFullName: issue.repo,
-          issueNumber: parseInt(issue.url.split("/").pop() ?? "0"),
+          issueNumber: Number.parseInt(issue.url.split("/").pop() ?? "0", 10),
           issueUrl: issue.url,
           reason,
         }),
@@ -680,6 +722,118 @@ function RecommendationsPanel({
   );
 }
 
+function getActiveIssuePanel({
+  activeTab,
+  authenticated,
+  contributionRevision,
+  rankedIssuesPanel,
+  recommendationsPanel,
+}: Readonly<{
+  activeTab: ContentTab;
+  authenticated: boolean;
+  contributionRevision: number;
+  rankedIssuesPanel: ReactNode;
+  recommendationsPanel: ReactNode;
+}>) {
+  if (!authenticated) return rankedIssuesPanel;
+
+  switch (activeTab) {
+    case "recommendations":
+      return recommendationsPanel;
+    case "contributions":
+      return (
+        <div
+          id="contribution-history-panel"
+          role="tabpanel"
+          aria-label="Contribution history"
+        >
+          <ContributionHistory key={contributionRevision} />
+        </div>
+      );
+    case "workflow":
+      return (
+        <div
+          id="opportunity-workflow-panel"
+          role="tabpanel"
+          aria-label="Contribution workflow"
+        >
+          <OpportunityWorkflow />
+        </div>
+      );
+    case "hidden-repositories":
+      return (
+        <div
+          id="hidden-repositories-panel"
+          role="tabpanel"
+          aria-label="Hidden repositories"
+        >
+          <HiddenRepositories />
+        </div>
+      );
+    default:
+      return rankedIssuesPanel;
+  }
+}
+
+function AuthenticatedIssueTabs({
+  activeTab,
+  onTabChange,
+}: Readonly<{
+  activeTab: ContentTab;
+  onTabChange: (tab: ContentTab) => void;
+}>) {
+  return (
+    <>
+      <Button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "recommendations"}
+        aria-controls="recommendations-panel"
+        variant={activeTab === "recommendations" ? "default" : "outline"}
+        size="sm"
+        className="gap-2"
+        onClick={() => onTabChange("recommendations")}
+      >
+        <Sparkles className="h-4 w-4" />
+        Recommended for you
+      </Button>
+      <Button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "workflow"}
+        aria-controls="opportunity-workflow-panel"
+        variant={activeTab === "workflow" ? "default" : "outline"}
+        size="sm"
+        onClick={() => onTabChange("workflow")}
+      >
+        Workflow
+      </Button>
+      <Button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "contributions"}
+        aria-controls="contribution-history-panel"
+        variant={activeTab === "contributions" ? "default" : "outline"}
+        size="sm"
+        onClick={() => onTabChange("contributions")}
+      >
+        Contribution history
+      </Button>
+      <Button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "hidden-repositories"}
+        aria-controls="hidden-repositories-panel"
+        variant={activeTab === "hidden-repositories" ? "default" : "outline"}
+        size="sm"
+        onClick={() => onTabChange("hidden-repositories")}
+      >
+        Hidden repositories
+      </Button>
+    </>
+  );
+}
+
 function IssueContentTabs({
   activeTab,
   authenticated,
@@ -695,41 +849,13 @@ function IssueContentTabs({
   rankedIssuesPanel: ReactNode;
   recommendationsPanel: ReactNode;
 }>) {
-  let activePanel = rankedIssuesPanel;
-
-  if (activeTab === "recommendations" && authenticated) {
-    activePanel = recommendationsPanel;
-  } else if (activeTab === "contributions" && authenticated) {
-    activePanel = (
-      <div
-        id="contribution-history-panel"
-        role="tabpanel"
-        aria-label="Contribution history"
-      >
-        <ContributionHistory key={contributionRevision} />
-      </div>
-    );
-  } else if (activeTab === "workflow" && authenticated) {
-    activePanel = (
-      <div
-        id="opportunity-workflow-panel"
-        role="tabpanel"
-        aria-label="Contribution workflow"
-      >
-        <OpportunityWorkflow />
-      </div>
-    );
-  } else if (activeTab === "hidden-repositories" && authenticated) {
-    activePanel = (
-      <div
-        id="hidden-repositories-panel"
-        role="tabpanel"
-        aria-label="Hidden repositories"
-      >
-        <HiddenRepositories />
-      </div>
-    );
-  }
+  const activePanel = getActiveIssuePanel({
+    activeTab,
+    authenticated,
+    contributionRevision,
+    rankedIssuesPanel,
+    recommendationsPanel,
+  });
 
   return (
     <div className="space-y-4">
@@ -750,60 +876,10 @@ function IssueContentTabs({
           Opportunities
         </Button>
         {authenticated ? (
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "recommendations"}
-            aria-controls="recommendations-panel"
-            variant={activeTab === "recommendations" ? "default" : "outline"}
-            size="sm"
-            className="gap-2"
-            onClick={() => onTabChange("recommendations")}
-          >
-            <Sparkles className="h-4 w-4" />
-            Recommended for you
-          </Button>
-        ) : null}
-        {authenticated ? (
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "workflow"}
-            aria-controls="opportunity-workflow-panel"
-            variant={activeTab === "workflow" ? "default" : "outline"}
-            size="sm"
-            onClick={() => onTabChange("workflow")}
-          >
-            Workflow
-          </Button>
-        ) : null}
-        {authenticated ? (
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "contributions"}
-            aria-controls="contribution-history-panel"
-            variant={activeTab === "contributions" ? "default" : "outline"}
-            size="sm"
-            onClick={() => onTabChange("contributions")}
-          >
-            Contribution history
-          </Button>
-        ) : null}
-        {authenticated ? (
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "hidden-repositories"}
-            aria-controls="hidden-repositories-panel"
-            variant={
-              activeTab === "hidden-repositories" ? "default" : "outline"
-            }
-            size="sm"
-            onClick={() => onTabChange("hidden-repositories")}
-          >
-            Hidden repositories
-          </Button>
+          <AuthenticatedIssueTabs
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+          />
         ) : null}
       </div>
       {activePanel}
@@ -1301,15 +1377,7 @@ export function IssueFinder() {
       const payload = (await response.json()) as SearchResponse;
 
       if (!response.ok) {
-        const error = new Error(payload.error ?? "Search failed.") as Error & {
-          rateLimit?: boolean;
-          retryAfter?: number | null;
-        };
-        if (payload.rateLimit) {
-          error.rateLimit = true;
-          error.retryAfter = payload.retryAfter ?? null;
-        }
-        throw error;
+        throw createSearchApiError(payload, "Search failed.");
       }
 
       if (requestId !== searchRequestId.current) return;
@@ -1327,28 +1395,18 @@ export function IssueFinder() {
     } catch (searchError) {
       if (requestId !== searchRequestId.current) return;
 
-      const message =
-        searchError instanceof Error
-          ? searchError.message
-          : "Search failed. Try another technology or label.";
-
-      setError(message);
+      setError(
+        getErrorMessage(
+          searchError,
+          "Search failed. Try another technology or label.",
+        ),
+      );
       setErrorSource("search");
 
-      // Detect rate limit errors from the API response
-      if (searchError instanceof Error && "rateLimit" in searchError) {
-        const rateLimitError = searchError as Error & {
-          rateLimit?: boolean;
-          retryAfter?: number | null;
-        };
-        if (rateLimitError.rateLimit) {
-          const retryAfterFromError = rateLimitError.retryAfter ?? null;
-          setRateLimitInfo({ retryAfter: retryAfterFromError });
-          cooldownDurationMs =
-            retryAfterFromError !== null
-              ? retryAfterFromError * 1000
-              : RATE_LIMIT_FALLBACK_COOLDOWN_MS;
-        }
+      const rateLimit = getRateLimitDetails(searchError);
+      if (rateLimit) {
+        setRateLimitInfo({ retryAfter: rateLimit.retryAfter });
+        cooldownDurationMs = rateLimit.cooldownMs;
       }
     } finally {
       if (requestId === searchRequestId.current) {
@@ -1389,17 +1447,7 @@ export function IssueFinder() {
       const payload = (await response.json()) as SearchResponse;
 
       if (!response.ok) {
-        const error = new Error(
-          payload.error ?? "Failed to load more issues.",
-        ) as Error & {
-          rateLimit?: boolean;
-          retryAfter?: number | null;
-        };
-        if (payload.rateLimit) {
-          error.rateLimit = true;
-          error.retryAfter = payload.retryAfter ?? null;
-        }
-        throw error;
+        throw createSearchApiError(payload, "Failed to load more issues.");
       }
 
       setIssues((prev) => mergeRankedIssues(prev, payload.issues, sort));
@@ -1409,26 +1457,13 @@ export function IssueFinder() {
         enrichment: mergeEnrichment(current?.enrichment, payload.enrichment),
       }));
     } catch (searchError) {
-      const message =
-        searchError instanceof Error
-          ? searchError.message
-          : "Failed to load more issues.";
-      setError(message);
+      setError(getErrorMessage(searchError, "Failed to load more issues."));
       setErrorSource("loadMore");
 
-      if (searchError instanceof Error && "rateLimit" in searchError) {
-        const rateLimitError = searchError as Error & {
-          rateLimit?: boolean;
-          retryAfter?: number | null;
-        };
-        if (rateLimitError.rateLimit) {
-          const retryAfterFromError = rateLimitError.retryAfter ?? null;
-          setRateLimitInfo({ retryAfter: retryAfterFromError });
-          rateLimitCooldownMs =
-            retryAfterFromError !== null
-              ? retryAfterFromError * 1000
-              : RATE_LIMIT_FALLBACK_COOLDOWN_MS;
-        }
+      const rateLimit = getRateLimitDetails(searchError);
+      if (rateLimit) {
+        setRateLimitInfo({ retryAfter: rateLimit.retryAfter });
+        rateLimitCooldownMs = rateLimit.cooldownMs;
       }
     } finally {
       setIsLoadingMore(false);
