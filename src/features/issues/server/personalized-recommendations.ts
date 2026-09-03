@@ -43,8 +43,13 @@ function addFamiliarRepositorySignal(recommendation: RecommendedIssue) {
 export async function buildPersonalizedRecommendations(
   savedSearches: SavedSearch[],
   opportunities: Array<{ issueUrl: string; repositoryFullName: string }>,
-  feedback: { dismissedIssueUrls: Set<string>; hiddenRepositories: Set<string> } = { dismissedIssueUrls: new Set(), hiddenRepositories: new Set() },
+  feedback?: {
+    dismissedIssueUrls: Set<string>;
+    hiddenRepositories: Set<string>;
+  },
 ): Promise<{ recommendations: RecommendedIssue[]; preferenceCount: number }> {
+  const dismissedIssueUrls = feedback?.dismissedIssueUrls ?? new Set<string>();
+  const hiddenRepositories = feedback?.hiddenRepositories ?? new Set<string>();
   const distinctPreferences = new Map<string, SavedSearch>();
 
   for (const search of [...savedSearches].sort(
@@ -89,8 +94,8 @@ export async function buildPersonalizedRecommendations(
 
     for (const issue of result.issues) {
       if (excludedUrls.has(issue.url)) continue;
-      if (feedback.dismissedIssueUrls.has(issue.url)) continue;
-      if (feedback.hiddenRepositories.has(issue.repo.toLowerCase())) continue;
+      if (dismissedIssueUrls.has(issue.url)) continue;
+      if (hiddenRepositories.has(issue.repo.toLowerCase())) continue;
 
       const current = recommendations.get(issue.id) ?? {
         issue,

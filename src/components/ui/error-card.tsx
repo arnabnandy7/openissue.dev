@@ -55,7 +55,7 @@ export function ErrorCard({
   actions = [],
   technicalDetails,
   className,
-}: ErrorCardProps) {
+}: Readonly<ErrorCardProps>) {
   const [showDetails, setShowDetails] = useState(false);
   const styles = variantStyles[variant];
   const Icon = variant === "warning" ? AlertTriangle : XCircle;
