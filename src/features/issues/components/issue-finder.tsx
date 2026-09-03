@@ -84,6 +84,8 @@ import {
 import { getRecommendations } from "@/features/issues/lib/recommendation-cloud";
 import type { RecommendationResponse } from "@/features/issues/types/recommendation";
 
+const SEARCH_COOLDOWN_MS = 3000;
+
 type SearchFilters = {
   tech: string;
   label: string;
@@ -328,7 +330,7 @@ function SearchSummary({
             description={
               rateLimitInfo.retryAfter
                 ? `Please wait approximately ${rateLimitInfo.retryAfter} seconds before retrying.`
-                : "You can try again shortly once the limit resets."
+                : "Please wait a few minutes before trying again."
             }
             actions={[
               {
@@ -839,34 +841,10 @@ export function IssueFinder() {
     retryAfter: number | null;
   } | null>(null);
   const [cooldown, setCooldown] = useState(false);
+  const [errorSource, setErrorSource] = useState<"search" | "loadMore" | null>(
+    null,
+  );
   const searchRequestId = useRef(0);
-  const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function scheduleCooldown(seconds: number | null) {
-    if (cooldownTimeoutRef.current) {
-      clearTimeout(cooldownTimeoutRef.current);
-      cooldownTimeoutRef.current = null;
-    }
-
-    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) {
-      setCooldown(false);
-      return;
-    }
-
-    setCooldown(true);
-    cooldownTimeoutRef.current = setTimeout(() => {
-      setCooldown(false);
-      cooldownTimeoutRef.current = null;
-    }, seconds * 1000);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (cooldownTimeoutRef.current) {
-        clearTimeout(cooldownTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savedSearchName, setSavedSearchName] = useState("");
@@ -908,6 +886,7 @@ export function IssueFinder() {
         setIssues([]);
         setError(null);
         setRateLimitInfo(null);
+        setErrorSource(null);
         setPage(1);
         setIsLoading(false);
         return;
@@ -1275,6 +1254,7 @@ export function IssueFinder() {
     setCooldown(true);
     setError(null);
     setRateLimitInfo(null);
+    setErrorSource(null);
     setIssues([]);
     setPage(1);
 
@@ -1291,8 +1271,7 @@ export function IssueFinder() {
       readiness: searchReadiness,
     });
     const requestId = ++searchRequestId.current;
-    let retryAfterFromError: number | null = null;
-    let hadFailure = false;
+    let cooldownDurationMs = SEARCH_COOLDOWN_MS;
 
     try {
       const response = await fetch(`/api/search?${params.toString()}`);
@@ -1325,14 +1304,13 @@ export function IssueFinder() {
     } catch (searchError) {
       if (requestId !== searchRequestId.current) return;
 
-      hadFailure = true;
-
       const message =
         searchError instanceof Error
           ? searchError.message
           : "Search failed. Try another technology or label.";
 
       setError(message);
+      setErrorSource("search");
 
       // Detect rate limit errors from the API response
       if (searchError instanceof Error && "rateLimit" in searchError) {
@@ -1341,21 +1319,20 @@ export function IssueFinder() {
           retryAfter?: number | null;
         };
         if (rateLimitError.rateLimit) {
-          retryAfterFromError = rateLimitError.retryAfter ?? null;
+          const retryAfterFromError = rateLimitError.retryAfter ?? null;
           setRateLimitInfo({ retryAfter: retryAfterFromError });
-          scheduleCooldown(retryAfterFromError ?? 3);
+          cooldownDurationMs =
+            retryAfterFromError !== null
+              ? retryAfterFromError * 1000
+              : SEARCH_COOLDOWN_MS;
         }
       }
     } finally {
       if (requestId === searchRequestId.current) {
         setIsLoading(false);
-        if (hadFailure && retryAfterFromError === null) {
-          scheduleCooldown(3);
-        } else if (hadFailure) {
-          scheduleCooldown(retryAfterFromError);
-        } else {
+        setTimeout(() => {
           setCooldown(false);
-        }
+        }, cooldownDurationMs);
       }
     }
   }
@@ -1366,6 +1343,7 @@ export function IssueFinder() {
     setIsLoadingMore(true);
     setError(null);
     setRateLimitInfo(null);
+    setErrorSource(null);
 
     const nextPage = page + 1;
     const params = createSearchParams(
@@ -1383,6 +1361,7 @@ export function IssueFinder() {
       },
       nextPage,
     );
+    let rateLimitCooldownMs: number | null = null;
 
     try {
       const response = await fetch(`/api/search?${params.toString()}`);
@@ -1414,6 +1393,7 @@ export function IssueFinder() {
           ? searchError.message
           : "Failed to load more issues.";
       setError(message);
+      setErrorSource("loadMore");
 
       if (searchError instanceof Error && "rateLimit" in searchError) {
         const rateLimitError = searchError as Error & {
@@ -1421,13 +1401,22 @@ export function IssueFinder() {
           retryAfter?: number | null;
         };
         if (rateLimitError.rateLimit) {
-          const retryAfter = rateLimitError.retryAfter ?? null;
-          setRateLimitInfo({ retryAfter });
-          scheduleCooldown(retryAfter ?? 3);
+          const retryAfterFromError = rateLimitError.retryAfter ?? null;
+          setRateLimitInfo({ retryAfter: retryAfterFromError });
+          rateLimitCooldownMs =
+            retryAfterFromError !== null
+              ? retryAfterFromError * 1000
+              : SEARCH_COOLDOWN_MS;
+          setCooldown(true);
         }
       }
     } finally {
       setIsLoadingMore(false);
+      if (rateLimitCooldownMs !== null) {
+        setTimeout(() => {
+          setCooldown(false);
+        }, rateLimitCooldownMs);
+      }
     }
   }
 
@@ -1435,6 +1424,11 @@ export function IssueFinder() {
   if (data) {
     tokenStatus = data.tokenConfigured ? "configured" : "not set";
   }
+
+  const handleRetry =
+    errorSource === "loadMore"
+      ? () => void loadMoreIssues()
+      : () => void searchIssues();
 
   return (
     <main className="min-h-screen bg-background">
@@ -1851,7 +1845,7 @@ export function IssueFinder() {
               isLoadingMore={isLoadingMore}
               savedOpportunityUrls={savedOpportunityUrls}
               rateLimitInfo={rateLimitInfo}
-              onRetry={() => void searchIssues()}
+              onRetry={handleRetry}
               cooldown={cooldown}
               onIssueOpen={session?.user.id ? handleOpportunityOpen : undefined}
               onIssueSaveChange={

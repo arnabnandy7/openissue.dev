@@ -11,7 +11,13 @@ type ErrorCardVariant = "warning" | "error";
 type ErrorCardAction = {
   label: string;
   onClick: () => void;
-  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  variant?:
+    | "default"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "destructive"
+    | "link";
   disabled?: boolean;
 };
 
@@ -57,7 +63,9 @@ export function ErrorCard({
   return (
     <Card className={cn(styles.card, className)}>
       <CardHeader>
-        <CardTitle className={cn("flex items-center gap-2 text-base", styles.title)}>
+        <CardTitle
+          className={cn("flex items-center gap-2 text-base", styles.title)}
+        >
           <Icon className="size-4 shrink-0" aria-hidden="true" />
           {title}
         </CardTitle>

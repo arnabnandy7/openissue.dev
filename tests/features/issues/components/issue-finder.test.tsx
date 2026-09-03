@@ -187,6 +187,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The main "Search" submit button and the ErrorCard's retry action can both
+// read "Cooldown..." while a rate-limit cooldown is active. Disambiguate by
+// button type: the retry action is type="button", the submit control isn't.
+function getRetryActionButton(name: string) {
+  return screen
+    .getAllByRole("button", { name })
+    .find(
+      (button) => (button as HTMLButtonElement).type === "button",
+    ) as HTMLButtonElement;
+}
+
 describe("IssueFinder", () => {
   it("defaults to results and mounts contribution history only after tab selection", () => {
     useSession.mockReturnValue({
@@ -630,12 +641,6 @@ describe("IssueFinder", () => {
     fireEvent.submit(
       screen.getByRole("button", { name: "Search" }).closest("form")!,
     );
-    await waitFor(
-      () => {
-        expect(screen.queryByRole("button", { name: "Saved" })).not.toBeNull();
-      },
-      { timeout: 8000 },
-    );
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Saved" }));
@@ -1032,7 +1037,7 @@ describe("IssueFinder", () => {
     expect(screen.getByText(/repository metadata is partial/)).toBeTruthy();
   });
 
-  it("shows a friendly rate limit card with retry action", async () => {
+  it("shows a friendly rate limit card with the retry duration and a disabled retry action", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(
         response({
@@ -1056,18 +1061,40 @@ describe("IssueFinder", () => {
       screen.getByText(/GitHub is temporarily limiting how many searches/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/Please wait approximately 120 seconds/),
+      screen.getByText(
+        "Please wait approximately 120 seconds before retrying.",
+      ),
     ).toBeTruthy();
-    // The error card's Try again button should be disabled during cooldown
-    const errorCard = screen
-      .getByText("Too many requests: please wait")
-      .closest("[data-slot='card']")!;
-    const retryButton = errorCard.querySelector("button")!;
-    expect(retryButton.disabled).toBe(true);
-    expect(retryButton.textContent).toContain("Cooldown...");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "Sign in for higher limits" }),
+    ).toBeNull();
   });
 
-  it("retries the search when the Try again button is clicked after cooldown", async () => {
+  it("shows a fallback message when no retry duration is available", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        response({
+          error: "GitHub API rate limit exceeded.",
+          rateLimit: true,
+          retryAfter: null,
+        }),
+        false,
+      ) as any,
+    );
+
+    render(<IssueFinder />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
+    );
+
+    expect(
+      await screen.findByText("Please wait a few minutes before trying again."),
+    ).toBeTruthy();
+  });
+
+  it("keeps retry disabled until the API-provided cooldown expires, then retries", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(
@@ -1075,46 +1102,136 @@ describe("IssueFinder", () => {
           response({
             error: "GitHub API rate limit exceeded.",
             rateLimit: true,
-            retryAfter: 1,
+            retryAfter: 120,
           }),
           false,
         ) as any,
       )
       .mockResolvedValueOnce(jsonResponse(response()) as any);
 
+    vi.useFakeTimers();
+    try {
+      render(<IssueFinder />);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Search" }).closest("form")!,
+      );
+
+      // Flush the pending fetch promise and the resulting state update.
+      // Using vi.advanceTimersByTimeAsync (instead of findBy/waitFor, which
+      // poll with real timers) keeps everything on the fake-timer clock so
+      // the test can't hang and leak fake timers into later tests.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByText("Too many requests: please wait")).toBeTruthy();
+      const retryButton = getRetryActionButton("Cooldown...");
+      expect(retryButton.disabled).toBe(true);
+
+      // Not enough time has passed yet: still disabled.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+
+      // The full retry-after window has elapsed: the button becomes usable.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      const enabledRetryButton = screen.getByRole("button", {
+        name: "Try again",
+      }) as HTMLButtonElement;
+      expect(enabledRetryButton.disabled).toBe(false);
+
+      fireEvent.click(enabledRetryButton);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(
+        screen.getByRole("heading", { name: "Opportunities" }),
+      ).toBeTruthy();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries the failed page instead of restarting the search after a rate-limited pagination failure", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: 0,
+          }),
+          false,
+        ) as any,
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({ issues: [issue(25)], page: 2, candidateCount: 25 }),
+        ) as any,
+      );
+
     render(<IssueFinder />);
     fireEvent.submit(
       screen.getByRole("button", { name: "Search" }).closest("form")!,
     );
+    await screen.findByText("Opportunities");
 
-    // Wait for the rate limit card to appear
+    fireEvent.click(await screen.findByRole("button", { name: "Load More" }));
     expect(
       await screen.findByText("Too many requests: please wait"),
     ).toBeTruthy();
-    expect(
-      screen.getByText(/Please wait approximately 1 seconds/),
-    ).toBeTruthy();
 
-    // Wait for the cooldown to expire and button to become enabled
-    await waitFor(
-      () => {
-        const errorCard = screen
-          .getByText("Too many requests: please wait")
-          .closest("[data-slot='card']")!;
-        const btn = errorCard.querySelector("button")!;
-        expect(btn.textContent).toContain("Try again");
-      },
-      { timeout: 3000 },
+    // retryAfter: 0 means the cooldown clears almost immediately.
+    await waitFor(() => {
+      const retryButton = screen.getByRole(
+        "button",
+        { name: "Try again" },
+      ) as HTMLButtonElement;
+      expect(retryButton.disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Issue 25")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // The retry continues the failed page rather than restarting at page 1.
+    expect(String(fetchMock.mock.calls[2][0])).toContain("page=2");
+  });
+
+  it("falls back to the default cooldown when a rate-limited pagination failure has no retry-after", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(response()) as any)
+      .mockResolvedValueOnce(
+        jsonResponse(
+          response({
+            error: "GitHub API rate limit exceeded.",
+            rateLimit: true,
+            retryAfter: null,
+          }),
+          false,
+        ) as any,
+      );
+
+    render(<IssueFinder />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Search" }).closest("form")!,
     );
+    await screen.findByText("Opportunities");
 
-    // Click the Try again button
-    const errorCard = screen
-      .getByText("Too many requests: please wait")
-      .closest("[data-slot='card']")!;
-    fireEvent.click(errorCard.querySelector("button")!);
+    fireEvent.click(await screen.findByRole("button", { name: "Load More" }));
+
     expect(
-      await screen.findByRole("heading", { name: "Opportunities" }),
+      await screen.findByText("Please wait a few minutes before trying again."),
     ).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  }, 10_000);
+    expect(getRetryActionButton("Cooldown...").disabled).toBe(true);
+  });
 });

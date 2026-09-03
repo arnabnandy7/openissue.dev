@@ -66,15 +66,17 @@ export function isRateLimitError(error: unknown): error is RateLimitError {
 
 type GitHubCommunityProfileResponse = {
   health_percentage: number;
-  files: Partial<Record<
-    | "readme"
-    | "contributing"
-    | "license"
-    | "code_of_conduct"
-    | "issue_template"
-    | "pull_request_template",
-    { html_url?: string | null } | null
-  >>;
+  files: Partial<
+    Record<
+      | "readme"
+      | "contributing"
+      | "license"
+      | "code_of_conduct"
+      | "issue_template"
+      | "pull_request_template",
+      { html_url?: string | null } | null
+    >
+  >;
 };
 
 type GitHubResponsivenessResponse = {
@@ -181,10 +183,7 @@ function buildRepoTopicQuery(tech: string) {
   }
 
   const topic = topicAlias?.topic ?? normalized.replaceAll(/\s+/g, "-");
-  const queryParts = [
-    `topic:${quoteSearchValue(topic)}`,
-    "archived:false",
-  ];
+  const queryParts = [`topic:${quoteSearchValue(topic)}`, "archived:false"];
 
   if (topicAlias?.language) {
     queryParts.push(`language:${quoteSearchValue(topicAlias.language)}`);
@@ -228,7 +227,7 @@ function getRepoFullName(repositoryUrl: string) {
 
   return repositoryUrl.startsWith(apiPrefix)
     ? repositoryUrl.slice(apiPrefix.length)
-    : repositoryUrl.split("/repos/").at(-1) ?? repositoryUrl;
+    : (repositoryUrl.split("/repos/").at(-1) ?? repositoryUrl);
 }
 
 function analyzeThreadIntent(comments: Array<{ body: string }>): IssueStatus {
@@ -239,22 +238,41 @@ function analyzeThreadIntent(comments: Array<{ body: string }>): IssueStatus {
   const text = comments.map((c) => (c.body || "").toLowerCase()).join(" ");
 
   const resolvedIndicators = [
-    "fixed in", "fixed by", "resolved", "closed by", "merged", 
-    "close this", "closing this", "already fixed", "already solved"
-  ];
-  
-  const claimedIndicators = [
-    "i'm on it", "i'm working on", "i am working on", "taking this up", 
-    "i will take this", "i will work on", "pr in progress", 
-    "assigned to", "working on it", "submitting a pr", "submitting a pull request"
+    "fixed in",
+    "fixed by",
+    "resolved",
+    "closed by",
+    "merged",
+    "close this",
+    "closing this",
+    "already fixed",
+    "already solved",
   ];
 
-  const resolvedMatch = resolvedIndicators.some(indicator => text.includes(indicator));
+  const claimedIndicators = [
+    "i'm on it",
+    "i'm working on",
+    "i am working on",
+    "taking this up",
+    "i will take this",
+    "i will work on",
+    "pr in progress",
+    "assigned to",
+    "working on it",
+    "submitting a pr",
+    "submitting a pull request",
+  ];
+
+  const resolvedMatch = resolvedIndicators.some((indicator) =>
+    text.includes(indicator),
+  );
   if (resolvedMatch) {
     return "resolved";
   }
 
-  const claimedMatch = claimedIndicators.some(indicator => text.includes(indicator));
+  const claimedMatch = claimedIndicators.some((indicator) =>
+    text.includes(indicator),
+  );
   if (claimedMatch) {
     return "claimed";
   }
@@ -268,7 +286,11 @@ function countLinkedPullRequests(events: GitHubTimelineEvent[]) {
   for (const event of events) {
     const issue = event.source?.issue;
 
-    if (event.event === "cross-referenced" && issue?.pull_request && issue.html_url) {
+    if (
+      event.event === "cross-referenced" &&
+      issue?.pull_request &&
+      issue.html_url
+    ) {
       linkedPullRequests.add(issue.html_url);
     }
   }
@@ -301,7 +323,10 @@ function scoreIssue(
   const ageDays =
     (Date.now() - new Date(issue.updated_at).getTime()) / (1000 * 60 * 60 * 24);
   const recencyScore = Math.max(0, 35 - ageDays * 1.5);
-  const starScore = Math.min(25, Math.log10((repo?.stargazers_count ?? 0) + 1) * 8);
+  const starScore = Math.min(
+    25,
+    Math.log10((repo?.stargazers_count ?? 0) + 1) * 8,
+  );
   const labelScore = Math.min(20, issue.labels.length * 4);
   const commentScore = Math.max(0, 15 - issue.comments * 1.5);
   const assignmentScore = issue.assignee || issue.assignees?.length ? 0 : 5;
@@ -336,7 +361,8 @@ function scoreTrendingIssue(issue: GitHubIssue, repo?: GitHubRepo) {
     20,
     Math.log10((repo?.stargazers_count ?? 0) + 1) * 5,
   );
-  const repositoryActivityScore = (scoreRepositoryHealth(repo).score ?? 0) * 0.2;
+  const repositoryActivityScore =
+    (scoreRepositoryHealth(repo).score ?? 0) * 0.2;
 
   return Math.round(
     recencyScore + discussionScore + starScore + repositoryActivityScore,
@@ -353,10 +379,7 @@ function dedupeIssues(issues: GitHubIssue[]) {
   return Array.from(issueMap.values());
 }
 
-function summarizeEnrichment(
-  issues: Issue[],
-  signal: keyof IssueEnrichment,
-) {
+function summarizeEnrichment(issues: Issue[], signal: keyof IssueEnrichment) {
   if (issues.length === 0) return "complete" as const;
 
   const availableCount = issues.filter(
@@ -380,8 +403,7 @@ async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
 
   if (!response.ok) {
     const body = await response.text();
-    const retryAfter = response.headers.get("retry-after");
-    const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
+    const retryAfterSeconds = computeRetryAfterSeconds(response.headers);
 
     if (
       (response.status === 403 || response.status === 429) &&
@@ -410,6 +432,31 @@ function isRateLimitResponse(body: string): boolean {
     lower.includes("api rate limit exceeded") ||
     lower.includes("secondary rate limit")
   );
+}
+
+// GitHub's primary rate-limit responses commonly omit `retry-after` and
+// instead provide `x-ratelimit-reset`, a Unix timestamp (seconds) for when
+// the limit resets. Fall back to computing the delay from that header so we
+// don't under-report the wait time with a default cooldown.
+function computeRetryAfterSeconds(headers: Headers): number | null {
+  const retryAfter = headers.get("retry-after");
+  if (retryAfter) {
+    const parsed = Number.parseInt(retryAfter, 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  const resetHeader = headers.get("x-ratelimit-reset");
+  if (resetHeader) {
+    const resetEpochSeconds = Number.parseInt(resetHeader, 10);
+    if (!Number.isNaN(resetEpochSeconds)) {
+      const nowEpochSeconds = Math.floor(Date.now() / 1000);
+      return Math.max(0, resetEpochSeconds - nowEpochSeconds);
+    }
+  }
+
+  return null;
 }
 
 async function buildSearchScope(tech: string, token?: string) {
@@ -462,7 +509,9 @@ export async function getRepositoryResponsiveness(
   token = process.env.GITHUB_TOKEN,
 ) {
   if (!token) {
-    return unknownRepositoryResponsiveness("GitHub token required for responsiveness analysis");
+    return unknownRepositoryResponsiveness(
+      "GitHub token required for responsiveness analysis",
+    );
   }
 
   const [owner, name] = fullName.split("/");
@@ -488,8 +537,7 @@ export async function getRepositoryResponsiveness(
 
   if (!response.ok) {
     const body = await response.text();
-    const retryAfter = response.headers.get("retry-after");
-    const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
+    const retryAfterSeconds = computeRetryAfterSeconds(response.headers);
 
     if (
       (response.status === 403 || response.status === 429) &&
@@ -507,7 +555,9 @@ export async function getRepositoryResponsiveness(
   const repository = payload.data?.repository;
 
   if (!repository || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message ?? "Repository analytics unavailable");
+    throw new Error(
+      payload.errors?.[0]?.message ?? "Repository analytics unavailable",
+    );
   }
 
   return scoreRepositoryResponsiveness(
@@ -541,7 +591,10 @@ export async function searchGitHubRepositories(
   query: string,
 ): Promise<RepositorySuggestion[]> {
   const url = new URL("https://api.github.com/search/repositories");
-  url.searchParams.set("q", `${query.trim()} in:name,description archived:false`);
+  url.searchParams.set(
+    "q",
+    `${query.trim()} in:name,description archived:false`,
+  );
   url.searchParams.set("sort", "stars");
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", "8");
@@ -563,10 +616,7 @@ export async function getRecentRepositoryIssues(
   repositoryFullName: string,
 ): Promise<RepositoryDigestIssue[]> {
   const url = new URL("https://api.github.com/search/issues");
-  url.searchParams.set(
-    "q",
-    `repo:${repositoryFullName} is:issue is:open`,
-  );
+  url.searchParams.set("q", `repo:${repositoryFullName} is:issue is:open`);
   url.searchParams.set("sort", "created");
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", "5");
@@ -641,11 +691,7 @@ export async function searchGitHubIssues({
   const label = GITHUB_LABELS[normalize(rawLabel)] ?? "help wanted";
   const sort = resolveSearchOption(rawSort, GITHUB_SORTS, "updated");
   const githubSort = sort === "trending" ? "updated" : sort;
-  const linkedPr = resolveSearchOption(
-    rawLinkedPr,
-    LINKED_PR_FILTERS,
-    "any",
-  );
+  const linkedPr = resolveSearchOption(rawLinkedPr, LINKED_PR_FILTERS, "any");
   const hacktoberfest = resolveSearchOption(
     rawHacktoberfest,
     HACKTOBERFEST_FILTERS,
@@ -735,12 +781,14 @@ export async function searchGitHubIssues({
 
   const issueQueries =
     repoBatches.length > 0
-      ? repoBatches.slice(0, CANDIDATE_PAGE_COUNT).map((repoBatch) =>
-          [
-            ...queryParts,
-            buildRepoScopeQualifier(repoBatch.map((repo) => repo.full_name)),
-          ].join(" "),
-        )
+      ? repoBatches
+          .slice(0, CANDIDATE_PAGE_COUNT)
+          .map((repoBatch) =>
+            [
+              ...queryParts,
+              buildRepoScopeQualifier(repoBatch.map((repo) => repo.full_name)),
+            ].join(" "),
+          )
       : [queryParts.join(" ")];
 
   const searchUrls = issueQueries.flatMap((issueQuery) => {
@@ -764,13 +812,19 @@ export async function searchGitHubIssues({
   );
   const totalCount = getSearchTotalCount(searchResults, repoBatches.length > 0);
   const rateLimitRemaining = searchResults.at(-1)?.rateLimitRemaining ?? null;
-  const candidateIssues = dedupeIssues(searchResults.flatMap((result) => result.data.items));
-  const repoEntriesFromSearch = matchingRepos.map((repo) => [repo.full_name, repo] as const);
+  const candidateIssues = dedupeIssues(
+    searchResults.flatMap((result) => result.data.items),
+  );
+  const repoEntriesFromSearch = matchingRepos.map(
+    (repo) => [repo.full_name, repo] as const,
+  );
   const repoEntriesFromSearchMap = new Map(repoEntriesFromSearch);
   const shouldFetchRepos = Boolean(token) || hacktoberfest === "only";
   const repoNames = shouldFetchRepos
     ? Array.from(
-        new Set(candidateIssues.map((item) => getRepoFullName(item.repository_url))),
+        new Set(
+          candidateIssues.map((item) => getRepoFullName(item.repository_url)),
+        ),
       ).filter((fullName) => !repoEntriesFromSearchMap.has(fullName))
     : [];
 
@@ -790,7 +844,9 @@ export async function searchGitHubIssues({
   );
   const repoEntries = [...repoEntriesFromSearch, ...fetchedRepoEntries];
   const responsivenessRepoNames = Array.from(
-    new Set(candidateIssues.map((issue) => getRepoFullName(issue.repository_url))),
+    new Set(
+      candidateIssues.map((issue) => getRepoFullName(issue.repository_url)),
+    ),
   ).slice(0, RESPONSIVENESS_REPOSITORY_LIMIT);
   const responsivenessEntries = await Promise.all(
     responsivenessRepoNames.map(async (fullName) => {
@@ -804,11 +860,16 @@ export async function searchGitHubIssues({
       }
     }),
   );
-  const communityProfileRepoNames = rawReadiness === undefined
-    ? []
-    : Array.from(
-        new Set(candidateIssues.map((issue) => getRepoFullName(issue.repository_url))),
-      ).slice(0, COMMUNITY_PROFILE_REPOSITORY_LIMIT);
+  const communityProfileRepoNames =
+    rawReadiness === undefined
+      ? []
+      : Array.from(
+          new Set(
+            candidateIssues.map((issue) =>
+              getRepoFullName(issue.repository_url),
+            ),
+          ),
+        ).slice(0, COMMUNITY_PROFILE_REPOSITORY_LIMIT);
   const communityProfileEntries = await Promise.all(
     communityProfileRepoNames.map(async (fullName) => {
       try {
@@ -870,7 +931,10 @@ export async function searchGitHubIssues({
       );
       return [
         issue.html_url,
-        { count: countLinkedPullRequests(timelineResult.data), available: true },
+        {
+          count: countLinkedPullRequests(timelineResult.data),
+          available: true,
+        },
       ] as const;
     } catch {
       return [issue.html_url, { count: null, available: false }] as const;
@@ -885,86 +949,97 @@ export async function searchGitHubIssues({
   const repositoryResponsiveness = new Map(responsivenessEntries);
   const communityProfiles = new Map(communityProfileEntries);
   const rankedIssues = rankIssues(
-    candidateIssues.map((issue): Issue => {
-      const repoName = getRepoFullName(issue.repository_url);
-      const repo = repos.get(repoName);
-      const discussion = issueCommentsMap.get(issue.html_url) ?? {
-        comments: [],
-        available: false,
-      };
-      const assigned = Boolean(issue.assignee || issue.assignees?.length);
-      
-      let helpStatus: IssueStatus = analyzeThreadIntent(discussion.comments);
-      if (assigned) {
-        helpStatus = "claimed";
-      }
-      const hacktoberfestSource = getHacktoberfestSource(issue, repo);
-      const repositoryHealth = scoreRepositoryHealth(repo);
-      const responsivenessSummary =
-        repositoryResponsiveness.get(repoName) ??
-        unknownRepositoryResponsiveness("Repository outside bounded analytics sample");
-      const classification = classifyIssue(issue);
-      const contributionReadiness = communityProfiles.has(repoName)
-        ? scoreContributionReadiness({
-            profile: communityProfiles.get(repoName),
-            repositoryHealth,
-            responsiveness: responsivenessSummary,
-            assigned,
-            helpStatus,
-          })
-        : unknownContributionReadiness("Repository outside bounded community-profile sample");
+    candidateIssues
+      .map((issue): Issue => {
+        const repoName = getRepoFullName(issue.repository_url);
+        const repo = repos.get(repoName);
+        const discussion = issueCommentsMap.get(issue.html_url) ?? {
+          comments: [],
+          available: false,
+        };
+        const assigned = Boolean(issue.assignee || issue.assignees?.length);
 
-      return {
-        id: issue.html_url,
-        title: issue.title,
-        url: issue.html_url,
-        repo: repo?.full_name ?? repoName,
-        repoUrl: repo?.html_url ?? `https://github.com/${repoName}`,
-        stars: repo?.stargazers_count ?? null,
-        comments: issue.comments,
-        labels: issue.labels.map((item) => item.name),
-        updatedAt: issue.updated_at,
-        createdAt: issue.created_at,
-        assigned,
-        linkedPrCount: null,
-        hacktoberfest: Boolean(hacktoberfestSource),
-        hacktoberfestSource,
-        helpStatus,
-        classification,
-        ...(rawReadiness !== undefined ? { contributionReadiness } : {}),
-        qualityScore:
-          scoreIssue(issue, repo, helpStatus, Boolean(hacktoberfestSource)) +
-          Math.round((repositoryHealth.score ?? 0) / 10) +
-          getResponsivenessBoost(responsivenessSummary.status),
-        ...(sort === "trending"
-          ? { trendingScore: scoreTrendingIssue(issue, repo) }
-          : {}),
-        repositoryHealth,
-        repositoryResponsiveness: responsivenessSummary,
-        enrichment: {
-          repositoryMetadata: Boolean(repo),
-          discussionAnalysis: discussion.available,
-          linkedPullRequests: false,
-          ...(rawReadiness !== undefined
-            ? { communityProfile: communityProfiles.get(repoName) !== undefined }
+        let helpStatus: IssueStatus = analyzeThreadIntent(discussion.comments);
+        if (assigned) {
+          helpStatus = "claimed";
+        }
+        const hacktoberfestSource = getHacktoberfestSource(issue, repo);
+        const repositoryHealth = scoreRepositoryHealth(repo);
+        const responsivenessSummary =
+          repositoryResponsiveness.get(repoName) ??
+          unknownRepositoryResponsiveness(
+            "Repository outside bounded analytics sample",
+          );
+        const classification = classifyIssue(issue);
+        const contributionReadiness = communityProfiles.has(repoName)
+          ? scoreContributionReadiness({
+              profile: communityProfiles.get(repoName),
+              repositoryHealth,
+              responsiveness: responsivenessSummary,
+              assigned,
+              helpStatus,
+            })
+          : unknownContributionReadiness(
+              "Repository outside bounded community-profile sample",
+            );
+
+        return {
+          id: issue.html_url,
+          title: issue.title,
+          url: issue.html_url,
+          repo: repo?.full_name ?? repoName,
+          repoUrl: repo?.html_url ?? `https://github.com/${repoName}`,
+          stars: repo?.stargazers_count ?? null,
+          comments: issue.comments,
+          labels: issue.labels.map((item) => item.name),
+          updatedAt: issue.updated_at,
+          createdAt: issue.created_at,
+          assigned,
+          linkedPrCount: null,
+          hacktoberfest: Boolean(hacktoberfestSource),
+          hacktoberfestSource,
+          helpStatus,
+          classification,
+          ...(rawReadiness !== undefined ? { contributionReadiness } : {}),
+          qualityScore:
+            scoreIssue(issue, repo, helpStatus, Boolean(hacktoberfestSource)) +
+            Math.round((repositoryHealth.score ?? 0) / 10) +
+            getResponsivenessBoost(responsivenessSummary.status),
+          ...(sort === "trending"
+            ? { trendingScore: scoreTrendingIssue(issue, repo) }
             : {}),
-        },
-      };
-    }).filter((issue) =>
-      matchesSearchFilters(issue, {
-        hacktoberfest,
-        responsiveness,
-        readiness,
-        experience,
-        contributionType,
-        scope,
-      }),
-    ),
+          repositoryHealth,
+          repositoryResponsiveness: responsivenessSummary,
+          enrichment: {
+            repositoryMetadata: Boolean(repo),
+            discussionAnalysis: discussion.available,
+            linkedPullRequests: false,
+            ...(rawReadiness !== undefined
+              ? {
+                  communityProfile:
+                    communityProfiles.get(repoName) !== undefined,
+                }
+              : {}),
+          },
+        };
+      })
+      .filter((issue) =>
+        matchesSearchFilters(issue, {
+          hacktoberfest,
+          responsiveness,
+          readiness,
+          experience,
+          contributionType,
+          scope,
+        }),
+      ),
     sort,
   );
   const start = (page - 1) * PAGE_SIZE;
   const selectedIssues = rankedIssues.slice(start, start + PAGE_SIZE);
-  const selectedIssueMap = new Map(candidateIssues.map((issue) => [issue.html_url, issue]));
+  const selectedIssueMap = new Map(
+    candidateIssues.map((issue) => [issue.html_url, issue]),
+  );
   const linkedPrEntries = await Promise.all(
     selectedIssues
       .map((issue) => selectedIssueMap.get(issue.id))
