@@ -887,6 +887,180 @@ function IssueContentTabs({
   );
 }
 
+function IssueFinderSidebar({
+  tech,
+  savedSearchName,
+  savedSearches,
+  authenticated,
+  linkedEmail,
+  alertEmail,
+  digestEnabled,
+  digestStatus,
+  isDigestPending,
+  onTechChange,
+  onLabelChange,
+  onSavedSearchNameChange,
+  onSaveSearch,
+  onRunSavedSearch,
+  onDeleteSavedSearch,
+  onAlertEmailChange,
+  onDigestPreferenceChange,
+  onSaveAlertEmail,
+  onDigestTrigger,
+}: Readonly<{
+  tech: string;
+  savedSearchName: string;
+  savedSearches: SavedSearch[];
+  authenticated: boolean;
+  linkedEmail?: string | null;
+  alertEmail: string;
+  digestEnabled: boolean;
+  digestStatus: string | null;
+  isDigestPending: boolean;
+  onTechChange: (value: string) => void;
+  onLabelChange: (value: string) => void;
+  onSavedSearchNameChange: (value: string) => void;
+  onSaveSearch: () => void;
+  onRunSavedSearch: (savedSearch: SavedSearch) => void;
+  onDeleteSavedSearch: (id: string) => void;
+  onAlertEmailChange: (value: string) => void;
+  onDigestPreferenceChange: () => void;
+  onSaveAlertEmail: () => void;
+  onDigestTrigger: () => void;
+}>) {
+  return (
+    <aside className="space-y-4 lg:self-start">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Quick searches</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {TECH_EXAMPLES.map((example) => (
+            <Button
+              key={example}
+              type="button"
+              variant={tech === example ? "default" : "outline"}
+              size="sm"
+              onClick={() => onTechChange(example)}
+            >
+              {example}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Supported labels</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {LABEL_OPTIONS.map((option) => {
+            const Icon = option.icon;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onLabelChange(option.value)}
+                className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+              >
+                <Icon className="h-4 w-4 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              </button>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Saved searches</CardTitle>
+          <CardDescription>
+            Save your current filters and reuse them later.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Input
+              value={savedSearchName}
+              onChange={(event) => onSavedSearchNameChange(event.target.value)}
+              placeholder="Search name"
+              aria-label="Saved search name"
+            />
+            <Button
+              type="button"
+              className="w-full gap-2"
+              onClick={onSaveSearch}
+            >
+              <Bookmark className="h-4 w-4" />
+              Save current search
+            </Button>
+          </div>
+
+          {authenticated ? (
+            <DigestControls
+              linkedEmail={linkedEmail}
+              alertEmail={alertEmail}
+              digestEnabled={digestEnabled}
+              digestStatus={digestStatus}
+              isPending={isDigestPending}
+              onAlertEmailChange={onAlertEmailChange}
+              onPreferenceChange={onDigestPreferenceChange}
+              onSaveAlertEmail={onSaveAlertEmail}
+              onTrigger={onDigestTrigger}
+            />
+          ) : null}
+
+          {savedSearches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No saved searches yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {savedSearches.map((savedSearch) => (
+                <div key={savedSearch.id} className="rounded-md border p-3">
+                  <div className="mb-2 min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {savedSearch.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {savedSearch.tech} · {savedSearch.label}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => onRunSavedSearch(savedSearch)}
+                    >
+                      Run
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Delete ${savedSearch.name}`}
+                      onClick={() => onDeleteSavedSearch(savedSearch.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {authenticated ? <RepositoryDigestCard /> : null}
+      {authenticated ? (
+        <AdminEmailCard defaultEmail={alertEmail || linkedEmail} />
+      ) : null}
+    </aside>
+  );
+}
+
 export function IssueFinder() {
   const { data: session, isPending: isSessionPending } =
     authClient.useSession();
@@ -1745,143 +1919,27 @@ export function IssueFinder() {
       </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
-        <aside className="space-y-4 lg:self-start">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Quick searches</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {TECH_EXAMPLES.map((example) => (
-                <Button
-                  key={example}
-                  type="button"
-                  variant={tech === example ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTech(example)}
-                >
-                  {example}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Supported labels</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {LABEL_OPTIONS.map((option) => {
-                const Icon = option.icon;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setLabel(option.value)}
-                    className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
-                  >
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Saved searches</CardTitle>
-              <CardDescription>
-                Save your current filters and reuse them later.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <Input
-                  value={savedSearchName}
-                  onChange={(event) => setSavedSearchName(event.target.value)}
-                  placeholder="Search name"
-                  aria-label="Saved search name"
-                />
-
-                <Button
-                  type="button"
-                  className="w-full gap-2"
-                  onClick={handleSaveSearch}
-                >
-                  <Bookmark className="h-4 w-4" />
-                  Save current search
-                </Button>
-              </div>
-
-              {session?.user.id ? (
-                <DigestControls
-                  linkedEmail={session.user.email}
-                  alertEmail={alertEmail}
-                  digestEnabled={digestEnabled}
-                  digestStatus={digestStatus}
-                  isPending={isDigestPending}
-                  onAlertEmailChange={setAlertEmail}
-                  onPreferenceChange={() => void handleDigestPreference()}
-                  onSaveAlertEmail={() => void handleAlertEmail()}
-                  onTrigger={() => void handleDigestTrigger()}
-                />
-              ) : null}
-
-              {savedSearches.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No saved searches yet.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {savedSearches.map((savedSearch) => (
-                    <div key={savedSearch.id} className="rounded-md border p-3">
-                      <div className="mb-2 min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {savedSearch.name}
-                        </p>
-
-                        <p className="truncate text-xs text-muted-foreground">
-                          {savedSearch.tech} · {savedSearch.label}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleRunSavedSearch(savedSearch)}
-                        >
-                          Run
-                        </Button>
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Delete ${savedSearch.name}`}
-                          onClick={() => {
-                            void handleDeleteSavedSearch(savedSearch.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          {session?.user.id ? <RepositoryDigestCard /> : null}
-          {session?.user.id ? (
-            <AdminEmailCard defaultEmail={alertEmail || session.user.email} />
-          ) : null}
-        </aside>
+        <IssueFinderSidebar
+          tech={tech}
+          savedSearchName={savedSearchName}
+          savedSearches={savedSearches}
+          authenticated={Boolean(session?.user.id)}
+          linkedEmail={session?.user.email}
+          alertEmail={alertEmail}
+          digestEnabled={digestEnabled}
+          digestStatus={digestStatus}
+          isDigestPending={isDigestPending}
+          onTechChange={setTech}
+          onLabelChange={setLabel}
+          onSavedSearchNameChange={setSavedSearchName}
+          onSaveSearch={handleSaveSearch}
+          onRunSavedSearch={handleRunSavedSearch}
+          onDeleteSavedSearch={(id) => void handleDeleteSavedSearch(id)}
+          onAlertEmailChange={setAlertEmail}
+          onDigestPreferenceChange={() => void handleDigestPreference()}
+          onSaveAlertEmail={() => void handleAlertEmail()}
+          onDigestTrigger={() => void handleDigestTrigger()}
+        />
 
         <IssueContentTabs
           activeTab={selectedContentTab}
