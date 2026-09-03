@@ -1,4 +1,4 @@
-name: Limit Dependabot pull requests
+name: Consolidate Dependabot pull requests
 
 on:
   pull_request_target:
@@ -9,36 +9,79 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  close-extra-pr:
+  consolidate-dependency-update:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/all-security-updates-') ||
+      startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/all-version-updates-'))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_PR: ${{ github.event.pull_request.number }}
+      SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
-      - name: Close the new PR when an older Dependabot PR is open
-        env:
-          CURRENT_PR: ${{ github.event.pull_request.number }}
-          CURRENT_CREATED_AT: ${{ github.event.pull_request.created_at }}
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
+      - name: Find the existing grouped dependency PR
+        id: target
         run: |
-          pr_author="$(gh api "repos/${GH_REPO}/pulls/${CURRENT_PR}" --jq '.user.login')"
-
-          if [[ "${pr_author}" != "dependabot[bot]" ]]; then
-            exit 0
-          fi
-
-          existing_pr="$(
+          target="$(
             gh pr list \
+              --repo "${GH_REPO}" \
               --state open \
               --author app/dependabot \
               --limit 100 \
-              --json number,createdAt \
-              --jq ".[] | select(.number != ${CURRENT_PR} and .createdAt < \"${CURRENT_CREATED_AT}\") | .number" \
+              --json number,headRefName,createdAt \
+              --jq ".[] | select(.number != ${SOURCE_PR}) | select(.headRefName | startswith(\"dependabot/npm_and_yarn/all-version-updates-\") or startswith(\"dependabot/npm_and_yarn/all-security-updates-\")) | [.number, .headRefName, .createdAt] | @tsv" \
+              | sort -k3 \
               | head -n 1
           )"
 
-          if [[ -n "${existing_pr}" ]]; then
-            gh pr close "${CURRENT_PR}" --comment \
-              "Closing this PR because Dependabot PR #${existing_pr} is already open. Dependabot will recreate updates after that PR is resolved."
+          if [[ -z "${target}" ]]; then
+            echo "No existing grouped dependency PR is open; PR #${SOURCE_PR} is now the canonical PR."
+            echo "found=false" >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
+
+          IFS=$'\t' read -r target_pr target_branch _ <<< "${target}"
+          echo "found=true" >> "${GITHUB_OUTPUT}"
+          echo "pr=${target_pr}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${target_branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out the grouped update branch
+        if: steps.target.outputs.found == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.target.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Merge the new dependency update
+        if: steps.target.outputs.found == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin \
+            "refs/heads/${SOURCE_BRANCH}:refs/remotes/origin/dependabot-update"
+          git merge --no-ff origin/dependabot-update \
+            -m "build(deps): incorporate Dependabot update #${SOURCE_PR}"
+
+      - name: Verify the combined dependency tree
+        if: steps.target.outputs.found == 'true'
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=low
+
+      - name: Update the grouped PR and close the redundant PR
+        if: steps.target.outputs.found == 'true'
+        env:
+          TARGET_BRANCH: ${{ steps.target.outputs.branch }}
+          TARGET_PR: ${{ steps.target.outputs.pr }}
+        run: |
+          git push origin "HEAD:${TARGET_BRANCH}"
+          gh pr comment "${TARGET_PR}" --repo "${GH_REPO}" --body \
+            "Automatically incorporated dependency update #${SOURCE_PR}."
+          gh pr close "${SOURCE_PR}" --repo "${GH_REPO}" --comment \
+            "Consolidated into grouped dependency PR #${TARGET_PR}."
