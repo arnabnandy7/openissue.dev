@@ -1055,7 +1055,7 @@ function IssueFinderSidebar({
       </Card>
       {authenticated ? <RepositoryDigestCard /> : null}
       {authenticated ? (
-        <AdminEmailCard defaultEmail={alertEmail || linkedEmail} />
+        <AdminEmailCard defaultEmail={alertEmail || linkedEmail || ""} />
       ) : null}
     </aside>
   );
