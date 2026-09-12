@@ -65,8 +65,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin \
             "refs/heads/${SOURCE_BRANCH}:refs/remotes/origin/dependabot-update"
-          git merge --no-ff origin/dependabot-update \
+          git merge --no-ff -X ours origin/dependabot-update \
             -m "build(deps): incorporate Dependabot update #${SOURCE_PR}"
+          npm install --package-lock-only
+          if ! git diff --quiet package-lock.json; then
+            git add package-lock.json
+            git commit --amend --no-edit
+          fi
 
       - name: Verify the combined dependency tree
         if: steps.target.outputs.found == 'true'
