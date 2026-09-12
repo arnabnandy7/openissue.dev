@@ -47,13 +47,13 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "6.0.3",
-    "vitest": "^5.0.0"
+    "vitest": "^4.1.10"
   },
   "allowScripts": {
     "unrs-resolver@1.12.2": true
