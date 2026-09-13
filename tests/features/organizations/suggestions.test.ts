@@ -85,4 +85,23 @@ describe("repository suggestions", () => {
     const calledUrl = fetchMock.mock.calls[0][0] as string;
     expect(calledUrl).toContain("org%3Avercel");
   });
+
+  it("handles rate limits and errors in suggestions", async () => {
+    const { RateLimitError } = await import("@/lib/github");
+    const rateLimitMock = vi.fn().mockRejectedValue(new RateLimitError("Rate limit", 60));
+    vi.stubGlobal("fetch", rateLimitMock);
+
+    await expect(getOrganizationSuggestions("test")).rejects.toThrow("Rate limit");
+    await expect(getRepositorySuggestions("test", "query")).rejects.toThrow("Rate limit");
+
+    // General network failure falls back gracefully
+    const networkFailMock = vi.fn().mockRejectedValue(new Error("Network fail"));
+    vi.stubGlobal("fetch", networkFailMock);
+
+    const fallbackOrgs = await getOrganizationSuggestions("ver");
+    expect(fallbackOrgs.some((o) => o.login === "vercel")).toBe(true);
+
+    const fallbackRepos = await getRepositorySuggestions("test", "query");
+    expect(fallbackRepos).toEqual([]);
+  });
 });

@@ -85,4 +85,65 @@ describe("suggestions APIs", () => {
     const body = await res.json();
     expect(body.repositories[0].name).toBe("next.js");
   });
+
+  it("handles rate limits and errors in search API", async () => {
+    const { searchOrganizationIssues } = await import(
+      "@/features/organizations/server/search"
+    );
+    const { RateLimitError } = await import("@/lib/github");
+
+    vi.mocked(searchOrganizationIssues).mockRejectedValueOnce(
+      new RateLimitError("Rate limit hit", 60),
+    );
+    const rateLimitRes = await getIssues(
+      new Request("http://localhost/api/organizations/issues?org=vercel&tech=TypeScript"),
+    );
+    expect(rateLimitRes.status).toBe(429);
+
+    vi.mocked(searchOrganizationIssues).mockRejectedValueOnce(
+      new Error("Network exploded"),
+    );
+    const errorRes = await getIssues(
+      new Request("http://localhost/api/organizations/issues?org=vercel&tech=TypeScript"),
+    );
+    expect(errorRes.status).toBe(502);
+  });
+
+  it("handles rate limits and errors in suggestion APIs", async () => {
+    const { getOrganizationSuggestions, getRepositorySuggestions } =
+      await import("@/features/organizations/server/suggestions");
+    const { RateLimitError } = await import("@/lib/github");
+
+    vi.mocked(getOrganizationSuggestions).mockRejectedValueOnce(
+      new RateLimitError("Rate limit", 30),
+    );
+    const orgRateRes = await getOrgSuggestions(
+      new Request("http://localhost/api/suggestions/organizations?query=ver"),
+    );
+    expect(orgRateRes.status).toBe(429);
+
+    vi.mocked(getOrganizationSuggestions).mockRejectedValueOnce(
+      new Error("Server error"),
+    );
+    const orgErrRes = await getOrgSuggestions(
+      new Request("http://localhost/api/suggestions/organizations?query=ver"),
+    );
+    expect(orgErrRes.status).toBe(500);
+
+    vi.mocked(getRepositorySuggestions).mockRejectedValueOnce(
+      new RateLimitError("Rate limit", 30),
+    );
+    const repoRateRes = await getRepoSuggestions(
+      new Request("http://localhost/api/suggestions/repositories?org=vercel"),
+    );
+    expect(repoRateRes.status).toBe(429);
+
+    vi.mocked(getRepositorySuggestions).mockRejectedValueOnce(
+      new Error("Server error"),
+    );
+    const repoErrRes = await getRepoSuggestions(
+      new Request("http://localhost/api/suggestions/repositories?org=vercel"),
+    );
+    expect(repoErrRes.status).toBe(500);
+  });
 });

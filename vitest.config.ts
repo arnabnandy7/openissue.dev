@@ -19,6 +19,8 @@ export default defineConfig({
         "src/components/ui/**",
         "src/app/layout.tsx",
         "src/app/page.tsx",
+        "src/app/organizations/page.tsx",
+        "src/app/pull-requests/page.tsx",
         "src/components/theme-provider.tsx",
         "src/app/api/auth/**",
         "src/lib/auth-schema.ts",
@@ -26,6 +28,7 @@ export default defineConfig({
         "src/lib/auth-client.ts",
         "src/features/issues/types/**",
         "src/features/issues/data/**",
+        "src/features/organizations/types.ts",
       ],
       thresholds: {
         statements: 95,

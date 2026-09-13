@@ -55,6 +55,50 @@ describe("organization filters", () => {
       validateOrganizationFilters({
         ...DEFAULT_ORGANIZATION_FILTERS,
         org: "vercel",
+        tech: "a".repeat(81),
+      }),
+    ).toBe("Technology must be 80 characters or fewer.");
+
+    expect(
+      validateOrganizationFilters({
+        ...DEFAULT_ORGANIZATION_FILTERS,
+        org: "vercel",
+        tech: "React",
+        repository: "a".repeat(141),
+      }),
+    ).toBe("Repository name must be 140 characters or fewer.");
+
+    expect(
+      validateOrganizationFilters({
+        ...DEFAULT_ORGANIZATION_FILTERS,
+        org: "vercel",
+        tech: "React",
+        repository: "invalid repo!?",
+      }),
+    ).toBe("Repository name is invalid.");
+
+    expect(
+      validateOrganizationFilters({
+        ...DEFAULT_ORGANIZATION_FILTERS,
+        org: "vercel",
+        tech: "React",
+        status: "unsupported" as any,
+      }),
+    ).toBe("Unsupported status filter.");
+
+    expect(
+      validateOrganizationFilters({
+        ...DEFAULT_ORGANIZATION_FILTERS,
+        org: "vercel",
+        tech: "React",
+        sort: "unsupported" as any,
+      }),
+    ).toBe("Unsupported sort filter.");
+
+    expect(
+      validateOrganizationFilters({
+        ...DEFAULT_ORGANIZATION_FILTERS,
+        org: "vercel",
         tech: "",
       }),
     ).toBe("Technology is required.");

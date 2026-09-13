@@ -151,4 +151,110 @@ describe("searchOrganizationIssues", () => {
       updatedAt: "2026-09-02T00:00:00Z",
     });
   });
+
+  it("handles empty repository matches for topic search gracefully", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total_count: 0 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const filters: OrganizationIssueFilters = {
+      org: "unknown-org",
+      tech: "React",
+      repository: "",
+      status: "open",
+      sort: "updated",
+      page: 1,
+    };
+
+    const response = await searchOrganizationIssues(filters);
+    expect(response.issues).toEqual([]);
+    expect(response.totalCount).toBe(0);
+    expect(response.notices[0]).toContain("No repositories in organization");
+  });
+
+  it("sorts results by comments and created date", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            total_count: 2,
+            items: [
+              {
+                node_id: "I_1",
+                number: 1,
+                title: "Old issue with more comments",
+                html_url: "https://github.com/v/r/issues/1",
+                repository_url: "https://api.github.com/repos/v/r",
+                user: null,
+                state: "open",
+                labels: [],
+                comments: 20,
+                created_at: "2026-01-01T00:00:00Z",
+                updated_at: "2026-01-01T00:00:00Z",
+              },
+              {
+                node_id: "I_2",
+                number: 2,
+                title: "New issue with fewer comments",
+                html_url: "https://github.com/v/r/issues/2",
+                repository_url: "https://api.github.com/repos/v/r",
+                user: null,
+                state: "open",
+                labels: [],
+                comments: 2,
+                created_at: "2026-09-01T00:00:00Z",
+                updated_at: "2026-09-01T00:00:00Z",
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const commentSorted = await searchOrganizationIssues({
+      org: "v",
+      tech: "TypeScript",
+      repository: "",
+      status: "open",
+      sort: "comments",
+      page: 1,
+    });
+    expect(commentSorted.issues[0].comments).toBe(20);
+
+    const createdSorted = await searchOrganizationIssues({
+      org: "v",
+      tech: "TypeScript",
+      repository: "",
+      status: "open",
+      sort: "created",
+      page: 1,
+    });
+    expect(createdSorted.issues[0].id).toBe("I_2");
+  });
+
+  it("handles framework search with an exact repository", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          full_name: "facebook/react",
+          private: false,
+          archived: false,
+          topics: ["react"],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { queries } = await buildOrganizationIssueQueries({
+      org: "facebook",
+      tech: "React",
+      repository: "react",
+      status: "open",
+      sort: "updated",
+      page: 1,
+    });
+    expect(queries[0]).toContain("repo:facebook/react");
+  });
 });
