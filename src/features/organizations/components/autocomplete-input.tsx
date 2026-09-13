@@ -184,8 +184,6 @@ export function AutocompleteInput<T>({
       return (
         <li
           key={getSuggestionKey(item)}
-          role="option"
-          aria-selected={isHighlighted}
           onMouseDown={(e) => {
             // Prevent blur before selection
             e.preventDefault();
@@ -250,7 +248,6 @@ export function AutocompleteInput<T>({
       {isOpen && !disabled && (
         <ul
           id={listboxId}
-          role="listbox"
           className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
         >
           {renderDropdownContent()}
