@@ -3,7 +3,7 @@ import "server-only";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { oAuthProxy } from "better-auth/plugins";
+import { admin, oAuthProxy } from "better-auth/plugins";
 import { getDatabase } from "@/lib/db";
 
 export const auth = betterAuth({
@@ -26,6 +26,10 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    admin({
+      defaultRole: "user",
+      adminRoles: ["admin"],
+    }),
     oAuthProxy({
       productionURL: "https://openissue-dev.vercel.app",
       secret: process.env.OAUTH_PROXY_SECRET,

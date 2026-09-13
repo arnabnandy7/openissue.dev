@@ -90,5 +90,25 @@ describe("AuthControls", () => {
 
     expect(screen.getByText("No Avatar")).toBeTruthy();
     expect(screen.queryByRole("presentation")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Admin Console" })).toBeNull();
+  });
+
+  it("renders an Admin Console button when user has admin role", () => {
+    useSession.mockReturnValue({
+      data: {
+        user: {
+          name: "Admin User",
+          role: "admin",
+          image: null,
+        },
+      },
+      isPending: false,
+    });
+
+    render(<AuthControls />);
+
+    const adminButton = screen.getByRole("button", { name: "Admin Console" });
+    expect(adminButton).toBeTruthy();
+    expect(screen.getByText("Admin")).toBeTruthy();
   });
 });

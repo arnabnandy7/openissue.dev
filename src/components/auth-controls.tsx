@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
@@ -33,8 +34,24 @@ export function AuthControls() {
     );
   }
 
+  const isAdmin = (session.user as { role?: string }).role === "admin";
+
   return (
     <div className="flex items-center gap-2">
+      {isAdmin ? (
+        <Link href="/admin" passHref>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs font-medium border-primary/30 text-primary hover:bg-primary/10"
+            title="Admin Console"
+            aria-label="Admin Console"
+          >
+            <Shield className="size-3.5" />
+            <span className="hidden sm:inline">Admin</span>
+          </Button>
+        </Link>
+      ) : null}
       {session.user.image ? (
         <Image
           src={session.user.image}

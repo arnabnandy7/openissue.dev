@@ -1,4 +1,4 @@
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import {
   deliverWeeklyDigest,
   getDigestContext,
@@ -35,9 +35,12 @@ export async function GET(request: Request) {
       eq(repositoryDigestTemplate.userId, user.id),
     )
     .where(
-      or(
-        eq(user.weeklyDigestEnabled, true),
-        eq(repositoryDigestTemplate.enabled, true),
+      and(
+        eq(user.banned, false),
+        or(
+          eq(user.weeklyDigestEnabled, true),
+          eq(repositoryDigestTemplate.enabled, true),
+        ),
       ),
     );
   let sent = 0;
