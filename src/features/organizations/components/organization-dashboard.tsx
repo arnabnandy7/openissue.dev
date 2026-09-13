@@ -61,6 +61,15 @@ const SORT_OPTIONS: ReadonlyArray<{
   { value: "comments", label: "Most comments" },
 ];
 
+function getSearchButtonLabel(
+  loading: boolean,
+  cooldown: number | null,
+): string {
+  if (loading) return "Searching…";
+  if (cooldown !== null) return "Cooldown…";
+  return "Search";
+}
+
 function SearchSession({ query }: Readonly<{ query: string }>) {
   const router = useRouter();
   const [filters, setFilters] = useState(() =>
@@ -359,7 +368,7 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
           disabled={loading || cooldown !== null}
         >
           <Search className="size-4" />
-          {loading ? "Searching…" : cooldown !== null ? "Cooldown…" : "Search"}
+          {getSearchButtonLabel(loading, cooldown)}
         </Button>
       </form>
 

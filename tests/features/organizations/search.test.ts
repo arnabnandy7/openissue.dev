@@ -135,7 +135,7 @@ describe("searchOrganizationIssues", () => {
 
     const response = await searchOrganizationIssues(filters);
     expect(response.totalCount).toBe(1);
-    expect(response.issues.length).toBe(1);
+    expect(response.issues).toHaveLength(1);
     expect(response.issues[0]).toEqual({
       id: "I_kwDOA123",
       number: 42,

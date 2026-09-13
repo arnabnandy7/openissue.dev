@@ -162,6 +162,49 @@ export function AutocompleteInput<T>({
     inputRef.current?.focus();
   }
 
+  function renderDropdownContent() {
+    if (loading && suggestions.length === 0) {
+      return (
+        <li className="p-3 text-center text-xs text-muted-foreground">
+          Loading suggestions…
+        </li>
+      );
+    }
+
+    if (suggestions.length === 0) {
+      return (
+        <li className="p-3 text-center text-xs text-muted-foreground">
+          {emptyMessage}
+        </li>
+      );
+    }
+
+    return suggestions.map((item, index) => {
+      const isHighlighted = index === highlightedIndex;
+      return (
+        <li
+          key={getSuggestionKey(item)}
+          role="option"
+          aria-selected={isHighlighted}
+          onMouseDown={(e) => {
+            // Prevent blur before selection
+            e.preventDefault();
+            handleSelect(item);
+          }}
+          onMouseEnter={() => setHighlightedIndex(index)}
+          className={cn(
+            "cursor-pointer select-none rounded-md px-2.5 py-1.5 text-sm transition-colors",
+            isHighlighted
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-muted/60",
+          )}
+        >
+          {renderSuggestion(item, isHighlighted)}
+        </li>
+      );
+    });
+  }
+
   return (
     <div ref={containerRef} className={cn("relative w-full min-w-0", className)}>
       <div className="relative flex items-center">
@@ -210,38 +253,7 @@ export function AutocompleteInput<T>({
           role="listbox"
           className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
         >
-          {loading && suggestions.length === 0 ? (
-            <li className="p-3 text-center text-xs text-muted-foreground">
-              Loading suggestions…
-            </li>
-          ) : suggestions.length === 0 ? (
-            <li className="p-3 text-center text-xs text-muted-foreground">
-              {emptyMessage}
-            </li>
-          ) : (
-            suggestions.map((item, index) => {
-              const isHighlighted = index === highlightedIndex;
-              return (
-                <li
-                  key={getSuggestionKey(item)}
-                  role="option"
-                  aria-selected={isHighlighted}
-                  onMouseDown={(e) => {
-                    // Prevent blur before selection
-                    e.preventDefault();
-                    handleSelect(item);
-                  }}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  className={cn(
-                    "cursor-pointer select-none rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                    isHighlighted ? "bg-accent text-accent-foreground" : "hover:bg-muted/60",
-                  )}
-                >
-                  {renderSuggestion(item, isHighlighted)}
-                </li>
-              );
-            })
-          )}
+          {renderDropdownContent()}
         </ul>
       )}
     </div>

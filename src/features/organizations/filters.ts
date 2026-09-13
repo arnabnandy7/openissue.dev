@@ -13,16 +13,17 @@ export const DEFAULT_ORGANIZATION_FILTERS: OrganizationIssueFilters = {
   page: 1,
 };
 
-const SUPPORTED_STATUSES: readonly OrganizationIssueStatus[] = [
+const SUPPORTED_STATUSES = new Set<OrganizationIssueStatus>([
   "open",
   "closed",
   "all",
-];
-const SUPPORTED_SORTS: readonly OrganizationIssueSort[] = [
+]);
+
+const SUPPORTED_SORTS = new Set<OrganizationIssueSort>([
   "updated",
   "created",
   "comments",
-];
+]);
 
 export function readOrganizationFilters(
   params: URLSearchParams,
@@ -35,14 +36,36 @@ export function readOrganizationFilters(
     org: (params.get("org") ?? "").trim(),
     tech: (params.get("tech") ?? "").trim(),
     repository: (params.get("repository") ?? "").trim(),
-    status: SUPPORTED_STATUSES.includes(statusParam as OrganizationIssueStatus)
+    status: SUPPORTED_STATUSES.has(statusParam as OrganizationIssueStatus)
       ? (statusParam as OrganizationIssueStatus)
       : "open",
-    sort: SUPPORTED_SORTS.includes(sortParam as OrganizationIssueSort)
+    sort: SUPPORTED_SORTS.has(sortParam as OrganizationIssueSort)
       ? (sortParam as OrganizationIssueSort)
       : "updated",
     page: Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1,
   };
+}
+
+function validateRepositoryFilter(
+  repository: string,
+  org: string,
+): string | null {
+  const repo = repository.trim();
+  if (!repo) return null;
+  if (repo.length > 140) {
+    return "Repository name must be 140 characters or fewer.";
+  }
+  const repoPattern = /^(?:[a-zA-Z0-9-]+\/)?[a-zA-Z0-9_.-]+$/;
+  if (!repoPattern.test(repo)) {
+    return "Repository name is invalid.";
+  }
+  if (repo.includes("/")) {
+    const [repoOwner] = repo.split("/");
+    if (repoOwner.toLowerCase() !== org.trim().toLowerCase()) {
+      return `Repository must belong to the "${org}" organization.`;
+    }
+  }
+  return null;
 }
 
 export function validateOrganizationFilters(
@@ -60,26 +83,14 @@ export function validateOrganizationFilters(
   if (filters.tech.length > 80) {
     return "Technology must be 80 characters or fewer.";
   }
-  if (filters.repository.trim()) {
-    const repo = filters.repository.trim();
-    if (repo.length > 140) {
-      return "Repository name must be 140 characters or fewer.";
-    }
-    const repoPattern = /^(?:[a-zA-Z0-9-]+\/)?[a-zA-Z0-9_.-]+$/;
-    if (!repoPattern.test(repo)) {
-      return "Repository name is invalid.";
-    }
-    if (repo.includes("/")) {
-      const [repoOwner] = repo.split("/");
-      if (repoOwner.toLowerCase() !== filters.org.trim().toLowerCase()) {
-        return `Repository must belong to the "${filters.org}" organization.`;
-      }
-    }
+  const repoError = validateRepositoryFilter(filters.repository, filters.org);
+  if (repoError) {
+    return repoError;
   }
-  if (!SUPPORTED_STATUSES.includes(filters.status)) {
+  if (!SUPPORTED_STATUSES.has(filters.status)) {
     return "Unsupported status filter.";
   }
-  if (!SUPPORTED_SORTS.includes(filters.sort)) {
+  if (!SUPPORTED_SORTS.has(filters.sort)) {
     return "Unsupported sort filter.";
   }
   return null;

@@ -39,7 +39,7 @@ describe("organization suggestions", () => {
 describe("technology suggestions", () => {
   it("returns popular technologies when query is empty", () => {
     const suggestions = getTechnologySuggestions("");
-    expect(suggestions.length).toBe(10);
+    expect(suggestions).toHaveLength(10);
     expect(suggestions.some((s) => s.name === "TypeScript")).toBe(true);
   });
 
@@ -77,7 +77,7 @@ describe("repository suggestions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const suggestions = await getRepositorySuggestions("vercel", "next");
-    expect(suggestions.length).toBe(1);
+    expect(suggestions).toHaveLength(1);
     expect(suggestions[0].name).toBe("next.js");
     expect(suggestions[0].fullName).toBe("vercel/next.js");
     expect(suggestions[0].stars).toBe(120000);
@@ -125,7 +125,7 @@ describe("repository suggestions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const repos = await getRepositorySuggestions("vercel");
-    expect(repos.length).toBe(1);
+    expect(repos).toHaveLength(1);
     expect(fetchMock.mock.calls[0][0]).toContain("org%3Avercel%20archived%3Afalse");
 
     // 2. organization suggestions with 10 items and null description
@@ -143,10 +143,10 @@ describe("repository suggestions", () => {
     vi.stubGlobal("fetch", orgFetchMock);
 
     const orgs = await getOrganizationSuggestions("org");
-    expect(orgs.length).toBe(8);
+    expect(orgs).toHaveLength(8);
 
     // 3. technology suggestions capped at 10 from popular and linguist
     const techMany = getTechnologySuggestions("c");
-    expect(techMany.length).toBe(10);
+    expect(techMany).toHaveLength(10);
   });
 });
