@@ -13,7 +13,11 @@ export function isRateLimitError(error: unknown): error is RateLimitError {
 }
 
 function isAllowedGitHubPath(pathname: string) {
-  if (pathname === "/search/issues" || pathname === "/search/repositories") return true;
+  if (
+    pathname === "/search/issues" ||
+    pathname === "/search/repositories" ||
+    pathname === "/search/users"
+  ) return true;
   const [, resource, owner = "", name = "", ...remaining] = pathname.split("/");
   if (
     resource !== "repos" ||

@@ -5,7 +5,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("GitHub request boundary", () => {
   it.each([
-    "/search/issues", "/search/repositories", "/repos/acme/widgets",
+    "/search/issues", "/search/repositories", "/search/users", "/repos/acme/widgets",
     "/repos/acme/.github/community/profile", "/repos/acme/widgets/issues/42/comments",
     "/repos/acme/widgets/issues/42/timeline", "/repos/acme/widgets/pulls/42",
   ])("allows supported endpoint %s", async (path) => {

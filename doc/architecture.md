@@ -64,59 +64,26 @@ flowchart LR
   Drizzle <--> Turso
 ```
 
-## Pull request discovery
+## Organization issue discovery
 
-`/pull-requests` provides a separate public PR dashboard with organization,
-technology, optional repository, status, and sort filters stored in the URL.
-`GET /api/pull-requests` returns basic results before enrichment. An exact
-repository replaces the organization qualifier, since combining GitHub scope
-qualifiers can broaden results. Open excludes drafts; closed excludes merged PRs.
+`/organizations` provides a dedicated public dashboard to search open-source
+issues across GitHub organizations, filtered by technology and optional repository.
+URL query parameters store the active filters (`org`, `tech`, `repository`, `status`, `sort`, `page`).
 
-Languages use a bundled GitHub Linguist name/alias catalog and repository language
-qualifiers. Frameworks use repository topics
-without imposing an additional language. Discovery covers up to 20 recently
-updated matching repositories within the organization, with visible coverage
-notices. An exact repository is checked independently of that cap. Repository
-groups are merged in sort order before pagination, with at most three search
-requests running concurrently. Searches expose up to ten pages of 24 results.
+### Auto-suggestions and dependencies
 
-`POST /api/pull-requests/enrichment` accepts up to 24 PR references. It batches
-review information through GraphQL and enriches up to 12 unique repositories,
-three at a time. Shared repository services preserve the issue board's two-hour
-metadata cache and six-hour responsiveness and documentation caches. Optional
-failures remain Unknown; private repository and PR details are not returned.
-All optional enrichment is skipped without the server's `GITHUB_TOKEN` to protect
-the shared unauthenticated quota. This does not require visitor login. Linked issue
-counts cover only public nodes in the first ten links; token-authorized connection
-totals are never exposed. The shared REST helper permits only the GitHub HTTPS API
-origin and refuses redirects.
+Auto-suggestions are enabled for all three primary filter inputs:
+- **Organization**: Debounced queries hit `GET /api/suggestions/organizations`, combining a curated set of popular open-source organizations with live results from GitHub's `/search/users?q=${query}+type:org` endpoint.
+- **Technology**: `GET /api/suggestions/technologies` returns suggestions matching curated popular technologies and the bundled GitHub Linguist language catalog.
+- **Repository (optional)**: Dependent on **Organization**. The repository input is disabled until an organization is provided. When active, `GET /api/suggestions/repositories?org=${org}&query=${query}` searches public repositories within that organization via GitHub's `/search/repositories?q=org:${org}...` endpoint. Changing the organization automatically resets any previously entered repository to maintain filter consistency.
 
-`GET /api/pull-requests/details` loads change statistics and mergeability when a
-card expands. Basic results remain usable while insights load. Changing filters
-or navigating away aborts stale client requests. Search, enrichment, and detail
-requests have separate application rate-limit buckets. No new tables are needed.
+### Query execution and discovery
 
-Performance should be measured separately for initial search and enrichment,
-with warm and cold caches and different numbers of unique repositories. No
-production latency target has been established. Saved PR searches and notifications
-are deferred.
-
-Active PR cards include an explainable readiness score: non-draft state (20),
-review decision (30), CI checks (25), absence of merge conflicts (15), and review
-size (10). Approved reviews receive 30 points, required reviews 10, and changes
-requested 0. Passing checks receive 25, pending/expected checks 5, and failures or
-errors 0. Changes up to 200 lines and 5 files receive 10 size points; up to 1,000
-lines and 20 files receive 5; larger changes receive 0. These weights are product
-heuristics for review readiness and effort, not code-quality judgments.
-
-Drafts are capped at 39. Changes requested, failing checks, or conflicts cap the
-score at 49. Missing signals produce a minimum–maximum range with weighted signal
-coverage rather than a failure penalty. Complete scores of 80 or more are labeled
-Ready; other unblocked complete scores need attention. Merged/closed PRs are N/A.
-Change statistics and mergeability are scalar fields on the existing batched
-GraphQL request, so scoring adds no HTTP requests and does not delay basic search.
-Without batch details, expanding a card can refine its score using the existing
-on-demand detail request.
+`GET /api/organizations/issues` executes issue discovery:
+- Scopes issues with `is:issue is:public archived:false`.
+- If an exact repository is specified, `repo:${org}/${repository}` narrows the search to that repository. Otherwise, `org:${org}` scopes to all public repositories in the organization.
+- Languages use GitHub language qualifiers (`language:"${name}"`). Framework technologies without direct language mappings discover up to 20 recently updated matching repositories via repository topics before searching issues across those repositories.
+- Results return mapped issue cards with repository name, title, status, labels, comments, author, and timestamps. Concurrency is bounded to at most three concurrent GitHub search requests.
 
 ## Issue discovery
 
