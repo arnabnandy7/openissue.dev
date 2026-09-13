@@ -21,6 +21,7 @@ export default defineConfig({
         "src/app/page.tsx",
         "src/app/organizations/page.tsx",
         "src/app/pull-requests/page.tsx",
+        "src/app/admin/page.tsx",
         "src/components/theme-provider.tsx",
         "src/app/api/auth/**",
         "src/lib/auth-schema.ts",

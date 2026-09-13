@@ -13,6 +13,27 @@ vi.mock("@/features/admin/lib/admin-users-client", () => ({
   unbanUser,
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: ({ onValueChange, children }: any) => (
+    <div>
+      <button
+        type="button"
+        data-testid="set-duration-btn"
+        onClick={() => onValueChange("86400")}
+      >
+        Set Duration
+      </button>
+      {children}
+    </div>
+  ),
+  SelectTrigger: ({ children }: any) => <div>{children}</div>,
+  SelectValue: ({ children }: any) => <div>{children}</div>,
+  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectItem: ({ children, value }: any) => (
+    <option value={value}>{children}</option>
+  ),
+}));
+
 import { BlockUserDialog } from "@/features/admin/components/block-user-dialog";
 import type { AdminUser } from "@/features/admin/lib/admin-users-client";
 
@@ -90,6 +111,40 @@ describe("BlockUserDialog", () => {
     });
   });
 
+  it("submits ban with non-zero duration", async () => {
+    banUser.mockResolvedValue({});
+
+    render(
+      <BlockUserDialog
+        user={mockUser}
+        mode="block"
+        open={true}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("set-duration-btn"));
+
+    const submitButton = screen.getByRole("button", { name: "Block User" });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(banUser).toHaveBeenCalledWith({
+        userId: "user-1",
+        banReason: undefined,
+        banExpiresIn: 86400,
+      });
+      expect(onSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "user-1",
+          banned: true,
+          banExpires: expect.any(Date),
+        }),
+      );
+    });
+  });
+
   it("renders unblock modal and submits unban", async () => {
     unbanUser.mockResolvedValue({});
 
@@ -140,5 +195,45 @@ describe("BlockUserDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("displays error message when ban fails", async () => {
+    banUser.mockRejectedValue(new Error("Database connection error"));
+
+    render(
+      <BlockUserDialog
+        user={mockUser}
+        mode="block"
+        open={true}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Block User" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Database connection error")).toBeTruthy();
+    });
+  });
+
+  it("displays fallback error when unban fails with non-Error", async () => {
+    unbanUser.mockRejectedValue("unknown error");
+
+    render(
+      <BlockUserDialog
+        user={{ ...mockUser, banned: true }}
+        mode="unblock"
+        open={true}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Unblock User" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Action failed. Please try again.")).toBeTruthy();
+    });
   });
 });

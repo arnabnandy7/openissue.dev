@@ -68,8 +68,11 @@ describe("admin users client", () => {
 
       await listAdminUsers({
         searchValue: "alice",
+        searchField: "email",
         limit: 10,
         offset: 20,
+        sortBy: "name",
+        sortDirection: "asc",
         filterField: "banned",
         filterValue: true,
         filterOperator: "eq",
@@ -78,11 +81,11 @@ describe("admin users client", () => {
       expect(admin.listUsers).toHaveBeenCalledWith({
         query: {
           searchValue: "alice",
-          searchField: undefined,
+          searchField: "email",
           limit: 10,
           offset: 20,
-          sortBy: "createdAt",
-          sortDirection: "desc",
+          sortBy: "name",
+          sortDirection: "asc",
           filterField: "banned",
           filterValue: true,
           filterOperator: "eq",
@@ -90,13 +93,33 @@ describe("admin users client", () => {
       });
     });
 
-    it("throws error when API returns failure", async () => {
+    it("handles response with null data gracefully", async () => {
+      admin.listUsers.mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      const res = await listAdminUsers();
+      expect(res.users).toEqual([]);
+      expect(res.total).toBe(0);
+    });
+
+    it("throws error when API returns failure with message", async () => {
       admin.listUsers.mockResolvedValue({
         data: null,
         error: { message: "Unauthorized." },
       });
 
       await expect(listAdminUsers()).rejects.toThrow("Unauthorized.");
+    });
+
+    it("throws default error when API returns failure without message", async () => {
+      admin.listUsers.mockResolvedValue({
+        data: null,
+        error: {},
+      });
+
+      await expect(listAdminUsers()).rejects.toThrow("Failed to list users.");
     });
   });
 
@@ -109,7 +132,7 @@ describe("admin users client", () => {
 
       const res = await banUser({
         userId: "u-1",
-        banReason: "Spam",
+        banReason: "  Spam  ",
         banExpiresIn: 86400,
       });
 
@@ -121,13 +144,31 @@ describe("admin users client", () => {
       expect(res).toBeDefined();
     });
 
-    it("throws error if ban fails", async () => {
+    it("handles empty reason", async () => {
       admin.banUser.mockResolvedValue({
-        data: null,
-        error: { message: "Cannot ban yourself." },
+        data: { user: { id: "u-1", banned: true } },
+        error: null,
       });
 
-      await expect(banUser({ userId: "self" })).rejects.toThrow("Cannot ban yourself.");
+      await banUser({
+        userId: "u-1",
+        banReason: "   ",
+      });
+
+      expect(admin.banUser).toHaveBeenCalledWith({
+        userId: "u-1",
+        banReason: undefined,
+        banExpiresIn: undefined,
+      });
+    });
+
+    it("throws default error if ban fails without message", async () => {
+      admin.banUser.mockResolvedValue({
+        data: null,
+        error: {},
+      });
+
+      await expect(banUser({ userId: "self" })).rejects.toThrow("Failed to ban user.");
     });
   });
 
@@ -141,6 +182,15 @@ describe("admin users client", () => {
       await unbanUser("u-1");
       expect(admin.unbanUser).toHaveBeenCalledWith({ userId: "u-1" });
     });
+
+    it("throws default error if unban fails without message", async () => {
+      admin.unbanUser.mockResolvedValue({
+        data: null,
+        error: {},
+      });
+
+      await expect(unbanUser("u-1")).rejects.toThrow("Failed to unban user.");
+    });
   });
 
   describe("setUserRole", () => {
@@ -153,6 +203,15 @@ describe("admin users client", () => {
       await setUserRole("u-1", "admin");
       expect(admin.setRole).toHaveBeenCalledWith({ userId: "u-1", role: "admin" });
     });
+
+    it("throws default error if setRole fails without message", async () => {
+      admin.setRole.mockResolvedValue({
+        data: null,
+        error: {},
+      });
+
+      await expect(setUserRole("u-1", "admin")).rejects.toThrow("Failed to update user role.");
+    });
   });
 
   describe("revokeUserSessions", () => {
@@ -164,6 +223,15 @@ describe("admin users client", () => {
 
       await revokeUserSessions("u-1");
       expect(admin.revokeUserSessions).toHaveBeenCalledWith({ userId: "u-1" });
+    });
+
+    it("throws default error if revokeUserSessions fails without message", async () => {
+      admin.revokeUserSessions.mockResolvedValue({
+        data: null,
+        error: {},
+      });
+
+      await expect(revokeUserSessions("u-1")).rejects.toThrow("Failed to revoke user sessions.");
     });
   });
 });
