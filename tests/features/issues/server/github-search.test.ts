@@ -885,8 +885,8 @@ describe("repository digest GitHub queries", () => {
         stars: 250,
       },
     ]);
-    expect(String(fetchMock.mock.calls[0][0])).toContain(
-      "widgets+in%3Aname%2Cdescription+archived%3Afalse",
+    expect(new URL(String(fetchMock.mock.calls[0][0])).searchParams.get("q")).toBe(
+      "widgets in:name,description archived:false",
     );
   });
 

@@ -64,6 +64,60 @@ flowchart LR
   Drizzle <--> Turso
 ```
 
+## Pull request discovery
+
+`/pull-requests` provides a separate public PR dashboard with organization,
+technology, optional repository, status, and sort filters stored in the URL.
+`GET /api/pull-requests` returns basic results before enrichment. An exact
+repository replaces the organization qualifier, since combining GitHub scope
+qualifiers can broaden results. Open excludes drafts; closed excludes merged PRs.
+
+Languages use a bundled GitHub Linguist name/alias catalog and repository language
+qualifiers. Frameworks use repository topics
+without imposing an additional language. Discovery covers up to 20 recently
+updated matching repositories within the organization, with visible coverage
+notices. An exact repository is checked independently of that cap. Repository
+groups are merged in sort order before pagination, with at most three search
+requests running concurrently. Searches expose up to ten pages of 24 results.
+
+`POST /api/pull-requests/enrichment` accepts up to 24 PR references. It batches
+review information through GraphQL and enriches up to 12 unique repositories,
+three at a time. Shared repository services preserve the issue board's two-hour
+metadata cache and six-hour responsiveness and documentation caches. Optional
+failures remain Unknown; private repository and PR details are not returned.
+All optional enrichment is skipped without the server's `GITHUB_TOKEN` to protect
+the shared unauthenticated quota. This does not require visitor login. Linked issue
+counts cover only public nodes in the first ten links; token-authorized connection
+totals are never exposed. The shared REST helper permits only the GitHub HTTPS API
+origin and refuses redirects.
+
+`GET /api/pull-requests/details` loads change statistics and mergeability when a
+card expands. Basic results remain usable while insights load. Changing filters
+or navigating away aborts stale client requests. Search, enrichment, and detail
+requests have separate application rate-limit buckets. No new tables are needed.
+
+Performance should be measured separately for initial search and enrichment,
+with warm and cold caches and different numbers of unique repositories. No
+production latency target has been established. Saved PR searches and notifications
+are deferred.
+
+Active PR cards include an explainable readiness score: non-draft state (20),
+review decision (30), CI checks (25), absence of merge conflicts (15), and review
+size (10). Approved reviews receive 30 points, required reviews 10, and changes
+requested 0. Passing checks receive 25, pending/expected checks 5, and failures or
+errors 0. Changes up to 200 lines and 5 files receive 10 size points; up to 1,000
+lines and 20 files receive 5; larger changes receive 0. These weights are product
+heuristics for review readiness and effort, not code-quality judgments.
+
+Drafts are capped at 39. Changes requested, failing checks, or conflicts cap the
+score at 49. Missing signals produce a minimum–maximum range with weighted signal
+coverage rather than a failure penalty. Complete scores of 80 or more are labeled
+Ready; other unblocked complete scores need attention. Merged/closed PRs are N/A.
+Change statistics and mergeability are scalar fields on the existing batched
+GraphQL request, so scoring adds no HTTP requests and does not delay basic search.
+Without batch details, expanding a card can refine its score using the existing
+on-demand detail request.
+
 ## Issue discovery
 
 `GET /api/search` validates and rate-limits requests before querying GitHub. Languages use GitHub language qualifiers; framework and ecosystem terms such as React, Next.js, Spring Boot, and Kubernetes use repository topics.
