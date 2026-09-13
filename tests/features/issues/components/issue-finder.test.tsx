@@ -755,7 +755,7 @@ describe("IssueFinder", () => {
     expect(await screen.findByText("Failed to load more issues.")).toBeTruthy();
   });
 
-  it("shows an unknown token status until a successful search reports it", async () => {
+  it("keeps server configuration out of the search overview", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(
@@ -766,19 +766,21 @@ describe("IssueFinder", () => {
       );
 
     render(<IssueFinder />);
-    expect(screen.getByText("unknown")).toBeTruthy();
+    expect(screen.queryByText("GitHub token")).toBeNull();
 
     const form = screen
       .getByRole("button", { name: "Search" })
       .closest("form")!;
     fireEvent.submit(form);
-    expect(await screen.findByText("configured")).toBeTruthy();
+    await screen.findByText("Opportunities");
+    expect(screen.queryByText("GitHub token")).toBeNull();
+    expect(screen.queryByText("configured")).toBeNull();
 
     fireEvent.submit(form);
     expect(
       (await screen.findAllByText("Search failed")).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText("configured")).toBeTruthy();
+    expect(screen.queryByText("GitHub token")).toBeNull();
   });
 
   it("writes successful searches to the URL without adding pagination entries", async () => {

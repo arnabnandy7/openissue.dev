@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
+import { DashboardNavigation } from "@/components/dashboard-navigation";
 import { Bookmark, Mail, Search, Sparkles, Trash2 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthControls } from "@/components/auth-controls";
@@ -1065,11 +1066,6 @@ function getSelectedContentTab(activeTab: ContentTab, authenticated: boolean) {
   return authenticated ? activeTab : "results";
 }
 
-function getTokenStatus(data: SearchResponse | null) {
-  if (!data) return "unknown";
-  return data.tokenConfigured ? "configured" : "not set";
-}
-
 function getRetryHandler(
   errorSource: "search" | "loadMore" | null,
   search: () => void,
@@ -1115,7 +1111,6 @@ function SearchOverview({
   scope,
   responsiveness,
   data,
-  tokenStatus,
 }: Readonly<{
   label: string;
   sort: string;
@@ -1126,7 +1121,6 @@ function SearchOverview({
   scope: string;
   responsiveness: string;
   data: SearchResponse | null;
-  tokenStatus: string;
 }>) {
   return (
     <Card className="self-end">
@@ -1151,7 +1145,6 @@ function SearchOverview({
           label="Raw GitHub matches"
           value={data ? compactNumber(data.totalCount) : "-"}
         />
-        <Metric label="GitHub token" value={tokenStatus} />
       </CardContent>
     </Card>
   );
@@ -1747,7 +1740,6 @@ export function IssueFinder() {
     }
   }
 
-  const tokenStatus = getTokenStatus(data);
   const handleRetry = getRetryHandler(
     errorSource,
     () => void searchIssues(),
@@ -1784,6 +1776,7 @@ export function IssueFinder() {
                   <ThemeToggle />
                 </div>
               </div>
+              <DashboardNavigation current="issues" />
               <div className="max-w-3xl space-y-4">
                 <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
                   Find active open-source issues by tech.
@@ -1981,7 +1974,6 @@ export function IssueFinder() {
             scope={selectedScope.label}
             responsiveness={selectedResponsiveness.label}
             data={data}
-            tokenStatus={tokenStatus}
           />
         </div>
       </section>

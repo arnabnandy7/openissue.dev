@@ -64,6 +64,27 @@ flowchart LR
   Drizzle <--> Turso
 ```
 
+## Organization issue discovery
+
+`/organizations` provides a dedicated public dashboard to search open-source
+issues across GitHub organizations, filtered by technology and optional repository.
+URL query parameters store the active filters (`org`, `tech`, `repository`, `status`, `sort`, `page`).
+
+### Auto-suggestions and dependencies
+
+Auto-suggestions are enabled for all three primary filter inputs:
+- **Organization**: Debounced queries hit `GET /api/suggestions/organizations`, combining a curated set of popular open-source organizations with live results from GitHub's `/search/users?q=${query}+type:org` endpoint.
+- **Technology**: `GET /api/suggestions/technologies` returns suggestions matching curated popular technologies and the bundled GitHub Linguist language catalog.
+- **Repository (optional)**: Dependent on **Organization**. The repository input is disabled until an organization is provided. When active, `GET /api/suggestions/repositories?org=${org}&query=${query}` searches public repositories within that organization via GitHub's `/search/repositories?q=org:${org}...` endpoint. Changing the organization automatically resets any previously entered repository to maintain filter consistency.
+
+### Query execution and discovery
+
+`GET /api/organizations/issues` executes issue discovery:
+- Scopes issues with `is:issue is:public archived:false`.
+- If an exact repository is specified, `repo:${org}/${repository}` narrows the search to that repository. Otherwise, `org:${org}` scopes to all public repositories in the organization.
+- Languages use GitHub language qualifiers (`language:"${name}"`). Framework technologies without direct language mappings discover up to 20 recently updated matching repositories via repository topics before searching issues across those repositories.
+- Results return mapped issue cards with repository name, title, status, labels, comments, author, and timestamps. Concurrency is bounded to at most three concurrent GitHub search requests.
+
 ## Issue discovery
 
 `GET /api/search` validates and rate-limits requests before querying GitHub. Languages use GitHub language qualifiers; framework and ecosystem terms such as React, Next.js, Spring Boot, and Kubernetes use repository topics.

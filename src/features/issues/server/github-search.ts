@@ -1,3 +1,7 @@
+import { githubFetch } from "@/lib/github";
+import { getRepositoryResponsiveness, getCommunityProfile } from "@/features/repositories/server/github-repository";
+export { RateLimitError, isRateLimitError } from "@/lib/github";
+export { getRepositoryResponsiveness } from "@/features/repositories/server/github-repository";
 import {
   CONTRIBUTION_TYPE_FILTERS,
   EXPERIENCE_FILTERS,
@@ -24,10 +28,7 @@ import {
 import { scoreRepositoryHealth } from "@/features/issues/lib/repository-health";
 import {
   getResponsivenessBoost,
-  scoreRepositoryResponsiveness,
   unknownRepositoryResponsiveness,
-  type ResponsivenessIssue,
-  type ResponsivenessPullRequest,
 } from "@/features/issues/lib/repository-responsiveness";
 import type {
   GitHubIssue,
@@ -49,66 +50,6 @@ const REPO_SEARCH_PAGE_SIZE = 20;
 const REPO_ISSUE_BATCH_SIZE = 10;
 const RESPONSIVENESS_REPOSITORY_LIMIT = 12;
 const COMMUNITY_PROFILE_REPOSITORY_LIMIT = 12;
-
-export class RateLimitError extends Error {
-  retryAfterSeconds: number | null;
-
-  constructor(message: string, retryAfterSeconds: number | null = null) {
-    super(message);
-    this.name = "RateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export function isRateLimitError(error: unknown): error is RateLimitError {
-  return error instanceof RateLimitError;
-}
-
-type GitHubCommunityProfileResponse = {
-  health_percentage: number;
-  files: Partial<
-    Record<
-      | "readme"
-      | "contributing"
-      | "license"
-      | "code_of_conduct"
-      | "issue_template"
-      | "pull_request_template",
-      { html_url?: string | null } | null
-    >
-  >;
-};
-
-type GitHubResponsivenessResponse = {
-  data?: {
-    repository?: {
-      issues: { nodes: ResponsivenessIssue[] };
-      pullRequests: { nodes: ResponsivenessPullRequest[] };
-    } | null;
-  };
-  errors?: Array<{ message: string }>;
-};
-
-const RESPONSIVENESS_QUERY = `
-  query RepositoryResponsiveness($owner: String!, $name: String!, $since: DateTime!) {
-    repository(owner: $owner, name: $name) {
-      issues(first: 20, orderBy: { field: CREATED_AT, direction: DESC }, filterBy: { since: $since }) {
-        nodes {
-          author { login }
-          closedAt
-          createdAt
-          labels(first: 10) { nodes { name } }
-          comments(first: 20) {
-            nodes { author { login } authorAssociation createdAt }
-          }
-        }
-      }
-      pullRequests(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
-        nodes { authorAssociation createdAt mergedAt }
-      }
-    }
-  }
-`;
 
 function normalize(value: string | null) {
   return (value ?? "").trim().toLowerCase();
@@ -391,74 +332,6 @@ function summarizeEnrichment(issues: Issue[], signal: keyof IssueEnrichment) {
   return "partial" as const;
 }
 
-async function githubFetch<T>(url: string, token?: string, revalidate = 60) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    next: { revalidate },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    const retryAfterSeconds = computeRetryAfterSeconds(response.headers);
-
-    if (
-      (response.status === 403 || response.status === 429) &&
-      isRateLimitResponse(body)
-    ) {
-      throw new RateLimitError(
-        "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
-        retryAfterSeconds,
-      );
-    }
-
-    throw new Error(`GitHub API error ${response.status}: ${body}`);
-  }
-
-  return {
-    data: (await response.json()) as T,
-    rateLimitRemaining: response.headers.get("x-ratelimit-remaining"),
-  };
-}
-
-function isRateLimitResponse(body: string): boolean {
-  const lower = body.toLowerCase();
-  return (
-    lower.includes("rate limit") ||
-    lower.includes("rate_limit") ||
-    lower.includes("api rate limit exceeded") ||
-    lower.includes("secondary rate limit")
-  );
-}
-
-// GitHub's primary rate-limit responses commonly omit `retry-after` and
-// instead provide `x-ratelimit-reset`, a Unix timestamp (seconds) for when
-// the limit resets. Fall back to computing the delay from that header so we
-// don't under-report the wait time with a default cooldown.
-function computeRetryAfterSeconds(headers: Headers): number | null {
-  const retryAfter = headers.get("retry-after");
-  if (retryAfter) {
-    const parsed = Number.parseInt(retryAfter, 10);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  const resetHeader = headers.get("x-ratelimit-reset");
-  if (resetHeader) {
-    const resetEpochSeconds = Number.parseInt(resetHeader, 10);
-    if (!Number.isNaN(resetEpochSeconds)) {
-      const nowEpochSeconds = Math.floor(Date.now() / 1000);
-      return Math.max(0, resetEpochSeconds - nowEpochSeconds);
-    }
-  }
-
-  return null;
-}
-
 async function buildSearchScope(tech: string, token?: string) {
   const repoTopicQuery = buildRepoTopicQuery(tech);
   const queryParts = ["is:issue", "is:open", "archived:false"];
@@ -502,89 +375,6 @@ function getSearchTotalCount(
     );
   }
   return searchResults[0]?.data.total_count ?? 0;
-}
-
-export async function getRepositoryResponsiveness(
-  fullName: string,
-  token = process.env.GITHUB_TOKEN,
-) {
-  if (!token) {
-    return unknownRepositoryResponsiveness(
-      "GitHub token required for responsiveness analysis",
-    );
-  }
-
-  const [owner, name] = fullName.split("/");
-  if (!owner || !name) return unknownRepositoryResponsiveness();
-
-  const sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  sinceDate.setUTCHours(Math.floor(sinceDate.getUTCHours() / 6) * 6, 0, 0, 0);
-  const since = sinceDate.toISOString();
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    body: JSON.stringify({
-      query: RESPONSIVENESS_QUERY,
-      variables: { owner, name, since },
-    }),
-    next: { revalidate: 21600 },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    const retryAfterSeconds = computeRetryAfterSeconds(response.headers);
-
-    if (
-      (response.status === 403 || response.status === 429) &&
-      isRateLimitResponse(body)
-    ) {
-      throw new RateLimitError(
-        "GitHub API rate limit exceeded. Please wait a few minutes and try again.",
-        retryAfterSeconds,
-      );
-    }
-
-    throw new Error(`GitHub GraphQL error ${response.status}`);
-  }
-  const payload = (await response.json()) as GitHubResponsivenessResponse;
-  const repository = payload.data?.repository;
-
-  if (!repository || payload.errors?.length) {
-    throw new Error(
-      payload.errors?.[0]?.message ?? "Repository analytics unavailable",
-    );
-  }
-
-  return scoreRepositoryResponsiveness(
-    repository.issues.nodes,
-    repository.pullRequests.nodes,
-  );
-}
-
-async function getCommunityProfile(fullName: string, token?: string) {
-  const result = await githubFetch<GitHubCommunityProfileResponse>(
-    `https://api.github.com/repos/${fullName}/community/profile`,
-    token,
-    21600,
-  );
-  const files = result.data.files ?? {};
-
-  return {
-    healthPercentage: result.data.health_percentage,
-    documentation: {
-      readme: files.readme?.html_url ?? null,
-      contributing: files.contributing?.html_url ?? null,
-      license: files.license?.html_url ?? null,
-      codeOfConduct: files.code_of_conduct?.html_url ?? null,
-      issueTemplate: files.issue_template?.html_url ?? null,
-      pullRequestTemplate: files.pull_request_template?.html_url ?? null,
-    },
-  };
 }
 
 export async function searchGitHubRepositories(
