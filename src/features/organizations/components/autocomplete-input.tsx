@@ -182,22 +182,25 @@ export function AutocompleteInput<T>({
     return suggestions.map((item, index) => {
       const isHighlighted = index === highlightedIndex;
       return (
-        <li
-          key={getSuggestionKey(item)}
-          onMouseDown={(e) => {
-            // Prevent blur before selection
-            e.preventDefault();
-            handleSelect(item);
-          }}
-          onMouseEnter={() => setHighlightedIndex(index)}
-          className={cn(
-            "cursor-pointer select-none rounded-md px-2.5 py-1.5 text-sm transition-colors",
-            isHighlighted
-              ? "bg-accent text-accent-foreground"
-              : "hover:bg-muted/60",
-          )}
-        >
-          {renderSuggestion(item, isHighlighted)}
+        <li key={getSuggestionKey(item)}>
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => {
+              // Prevent blur before selection
+              e.preventDefault();
+              handleSelect(item);
+            }}
+            onMouseEnter={() => setHighlightedIndex(index)}
+            className={cn(
+              "w-full text-left cursor-pointer select-none rounded-md px-2.5 py-1.5 text-sm transition-colors",
+              isHighlighted
+                ? "bg-accent text-accent-foreground"
+                : "hover:bg-muted/60",
+            )}
+          >
+            {renderSuggestion(item, isHighlighted)}
+          </button>
         </li>
       );
     });
