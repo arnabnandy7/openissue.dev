@@ -137,5 +137,8 @@ describe("organization filters", () => {
     expect(params.get("status")).toBe("closed");
     expect(params.get("sort")).toBe("created");
     expect(params.get("page")).toBe("2");
+
+    const defaultParams = organizationSearchParams(DEFAULT_ORGANIZATION_FILTERS);
+    expect(defaultParams.toString()).toBe("");
   });
 });

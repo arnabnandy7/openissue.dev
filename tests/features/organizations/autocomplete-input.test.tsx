@@ -63,4 +63,44 @@ describe("AutocompleteInput", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onChange).toHaveBeenCalled();
   });
+
+  it("handles disabled focus and unhighlighted Enter", () => {
+    const onChange = vi.fn();
+    render(
+      <AutocompleteInput<string>
+        value=""
+        disabled
+        onChange={onChange}
+        fetchSuggestions={() => []}
+        getSuggestionValue={(s) => s}
+        getSuggestionKey={(s) => s}
+        renderSuggestion={(s) => <span>{s}</span>}
+      />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("ignores Enter when no suggestion is highlighted", () => {
+    const onChange = vi.fn();
+    render(
+      <AutocompleteInput<string>
+        value="a"
+        onChange={onChange}
+        fetchSuggestions={() => ["apple"]}
+        getSuggestionValue={(s) => s}
+        getSuggestionKey={(s) => s}
+        renderSuggestion={(s) => <span>{s}</span>}
+        debounceMs={0}
+      />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    // Enter with no highlighted index
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

@@ -377,4 +377,28 @@ describe("OrganizationDashboard", () => {
     // Repeated submit when query params are identical triggers re-attempt
     fireEvent.click(screen.getByRole("button", { name: /search issues/i }));
   });
+
+  it("handles validation error from URL parameters", async () => {
+    navigation.query = "org=invalid+org!&tech=TypeScript";
+    render(<OrganizationDashboard />);
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Organization name may contain up to 39 alphanumeric characters/),
+      ).toBeTruthy();
+    });
+  });
+
+  it("handles validation error on form submission", () => {
+    render(<OrganizationDashboard />);
+    const orgInput = screen.getByLabelText("Organization");
+    const techInput = screen.getByLabelText("Technology");
+    fireEvent.change(orgInput, { target: { value: "invalid org name!" } });
+    fireEvent.change(techInput, { target: { value: "TypeScript" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /search issues/i }));
+    expect(
+      screen.getByText(/Organization name may contain up to 39 alphanumeric characters/),
+    ).toBeTruthy();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
 });

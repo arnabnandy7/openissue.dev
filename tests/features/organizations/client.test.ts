@@ -50,4 +50,17 @@ describe("fetchOrganizationData", () => {
       "Request failed (500)",
     );
   });
+
+  it("handles JSON error responses without error field", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: "Something broke" }), {
+        status: 500,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchOrganizationData("/api/test")).rejects.toThrow(
+      "Request failed (500)",
+    );
+  });
 });

@@ -104,4 +104,49 @@ describe("repository suggestions", () => {
     const fallbackRepos = await getRepositorySuggestions("test", "query");
     expect(fallbackRepos).toEqual([]);
   });
+
+  it("handles empty query in repository suggestions and caps organization and technology suggestions", async () => {
+    // 1. empty query in getRepositorySuggestions
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              name: "turbo",
+              full_name: "vercel/turbo",
+              stargazers_count: 25000,
+              description: null,
+              private: false,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const repos = await getRepositorySuggestions("vercel");
+    expect(repos.length).toBe(1);
+    expect(fetchMock.mock.calls[0][0]).toContain("org%3Avercel%20archived%3Afalse");
+
+    // 2. organization suggestions with 10 items and null description
+    const orgFetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          items: Array.from({ length: 10 }, (_, i) => ({
+            login: `org-${i}`,
+            avatar_url: `https://example.com/${i}.png`,
+            description: null,
+          })),
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", orgFetchMock);
+
+    const orgs = await getOrganizationSuggestions("org");
+    expect(orgs.length).toBe(8);
+
+    // 3. technology suggestions capped at 10 from popular and linguist
+    const techMany = getTechnologySuggestions("c");
+    expect(techMany.length).toBe(10);
+  });
 });
