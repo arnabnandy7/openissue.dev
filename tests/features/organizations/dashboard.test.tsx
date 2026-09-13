@@ -261,4 +261,120 @@ describe("OrganizationDashboard", () => {
     });
     expect(screen.getByText(/Retry enabled in 30s/)).toBeTruthy();
   });
+
+  it("handles tech and repo auto-suggestions, dropdown changes, and next page", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/api/suggestions/technologies")) {
+        return Promise.resolve(
+          jsonResponse({
+            technologies: [{ name: "React", type: "framework" }],
+          }),
+        );
+      }
+      if (url.includes("/api/suggestions/repositories")) {
+        return Promise.resolve(
+          jsonResponse({
+            repositories: [
+              {
+                name: "next.js",
+                fullName: "vercel/next.js",
+                stars: 120000,
+                description: "The React Framework",
+              },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/organizations/issues")) {
+        return Promise.resolve(
+          jsonResponse({
+            issues: [sampleIssue],
+            totalCount: 50,
+            page: 1,
+            hasMore: true,
+            query: "is:issue",
+            notices: [],
+            tokenConfigured: true,
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OrganizationDashboard />);
+    const orgInput = screen.getByLabelText("Organization");
+    const techInput = screen.getByLabelText("Technology");
+    const repoInput = screen.getByLabelText("Repository (optional)");
+
+    // Fill org
+    fireEvent.change(orgInput, { target: { value: "vercel" } });
+
+    // Focus and select tech
+    fireEvent.focus(techInput);
+    fireEvent.change(techInput, { target: { value: "reac" } });
+    await waitFor(() => {
+      expect(screen.getByText("React")).toBeTruthy();
+    });
+    expect(screen.getByText("framework")).toBeTruthy();
+    fireEvent.mouseDown(screen.getByText("React"));
+    expect((techInput as HTMLInputElement).value).toBe("React");
+
+    // Focus and select repo
+    fireEvent.focus(repoInput);
+    fireEvent.change(repoInput, { target: { value: "next" } });
+    await waitFor(() => {
+      expect(screen.getByText("The React Framework")).toBeTruthy();
+    });
+    fireEvent.mouseDown(screen.getByText("The React Framework"));
+    expect((repoInput as HTMLInputElement).value).toBe("next.js");
+
+    // Change status and sort
+    const statusSelect = screen.getByLabelText("Status");
+    fireEvent.change(statusSelect, { target: { value: "closed" } });
+    const sortSelect = screen.getByLabelText("Sort by");
+    fireEvent.change(sortSelect, { target: { value: "comments" } });
+
+    // Submit form
+    fireEvent.click(screen.getByRole("button", { name: /search issues/i }));
+    expect(navigation.push).toHaveBeenCalledWith(
+      expect.stringContaining("status=closed"),
+      expect.anything(),
+    );
+  });
+
+  it("handles pagination next and repeated search submission", async () => {
+    navigation.query = "org=vercel&tech=React";
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        issues: [sampleIssue],
+        totalCount: 50,
+        page: 1,
+        hasMore: true,
+        query: "is:issue",
+        notices: [],
+        tokenConfigured: true,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OrganizationDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Next")).toBeTruthy();
+    });
+
+    // Next page button
+    const nextBtn = screen.getByRole("button", { name: /next/i });
+    expect((nextBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(nextBtn);
+    expect(navigation.push).toHaveBeenCalledWith(
+      expect.stringContaining("page=2"),
+      expect.anything(),
+    );
+
+    // Repeated submit when query params are identical triggers re-attempt
+    fireEvent.click(screen.getByRole("button", { name: /search issues/i }));
+  });
 });

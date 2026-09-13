@@ -257,4 +257,32 @@ describe("searchOrganizationIssues", () => {
     });
     expect(queries[0]).toContain("repo:facebook/react");
   });
+
+  it("handles incomplete repository discovery and caps with notices", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          items: Array.from({ length: 20 }, (_, i) => ({
+            full_name: `facebook/repo-${i}`,
+            private: false,
+          })),
+          total_count: 50,
+          incomplete_results: true,
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { queries, notices } = await buildOrganizationIssueQueries({
+      org: "facebook",
+      tech: "React",
+      repository: "",
+      status: "open",
+      sort: "updated",
+      page: 1,
+    });
+    expect(queries.length).toBeGreaterThan(1);
+    expect(notices.some((n) => n.includes("50"))).toBe(true);
+    expect(notices.some((n) => n.includes("incomplete"))).toBe(true);
+  });
 });
