@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import * as React from "react";
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -21,7 +20,7 @@ vi.mock("@/components/theme-toggle", () => ({ ThemeToggle: () => null }));
 vi.mock("@/components/ui/select", () => ({
   Select: ({ value, onValueChange, children }: any) => {
     let selectTrigger: any = null;
-    let selectItems: any[] = [];
+    const selectItems: any[] = [];
     React.Children.forEach(children, (child: any) => {
       if (!child) return;
       if (child.type?.name === "SelectTrigger" || child.props?.["aria-label"]) {

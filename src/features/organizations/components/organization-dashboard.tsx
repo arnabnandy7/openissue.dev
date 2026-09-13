@@ -482,25 +482,37 @@ export function OrganizationDashboard() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <DashboardNavigation current="organizations" />
-            </div>
-            <div className="flex items-center gap-3">
-              <AuthControls />
-              <ThemeToggle />
-            </div>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="gap-1.5">
+              <Image
+                src="/openissue-logo.png"
+                alt=""
+                width={16}
+                height={16}
+                className="h-4 w-4"
+              />
+              OSS Issue Finder
+            </Badge>
+            <Badge variant="outline">GitHub Search API</Badge>
           </div>
-          <div className="max-w-3xl space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <div className="flex items-center gap-2">
+            <AuthControls />
+            <ThemeToggle />
+          </div>
+        </header>
+
+        <div className="mt-8 mb-8 space-y-5">
+          <DashboardNavigation current="organizations" />
+          <div className="max-w-3xl space-y-4">
+            <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
               Find issues by organization.
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
               Discover issues across top open-source organizations filtered by your preferred technology.
             </p>
           </div>
-        </header>
+        </div>
 
         <main className="space-y-6">
           <SearchSession key={query} query={query} />

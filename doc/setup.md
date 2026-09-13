@@ -53,6 +53,7 @@ Run the SQL migrations in filename order against the Turso database:
 11. `db/migrations/0011_issue_feedback.sql`
 12. `db/migrations/0012_opportunity_workflow.sql`
 13. `db/migrations/0013_contribution_readiness.sql`
+14. `db/migrations/0014_user_moderation.sql`
 
 The first migration creates Better Auth's user, session, account, and verification tables. The second creates user-owned saved searches. Migration files intentionally contain structure only—never credentials or production data.
 
@@ -81,6 +82,8 @@ by a user. The twelfth adds private state, note, follow-up date, and workflow
 activity fields to saved opportunities; existing opportunities begin in Saved.
 The thirteenth adds the contribution-readiness preference to cloud saved searches;
 existing records continue to include every readiness status.
+The fourteenth adds role, moderation, and impersonation fields to users and sessions
+for the Better Auth admin plugin, and promotes existing administrator records.
 
 ## GitHub OAuth
 

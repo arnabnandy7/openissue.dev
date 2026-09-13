@@ -1754,42 +1754,44 @@ export function IssueFinder() {
   return (
     <main className="min-h-screen bg-background">
       <section className="border-b bg-muted/30">
-        <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
-          <div className="flex min-w-0 flex-col justify-between gap-8">
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="gap-1.5">
-                    <Image
-                      src="/openissue-logo.png"
-                      alt=""
-                      width={16}
-                      height={16}
-                      className="h-4 w-4"
-                    />
-                    OSS Issue Finder
-                  </Badge>
-                  <Badge variant="outline">GitHub Search API</Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <AuthControls />
-                  <ThemeToggle />
-                </div>
-              </div>
-              <DashboardNavigation current="issues" />
-              <div className="max-w-3xl space-y-4">
-                <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
-                  Find active open-source issues by tech.
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                  Search contributor-friendly GitHub issues with labels like
-                  help wanted, good first issue, up-for-grabs, and
-                  documentation.
-                </p>
-              </div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <header className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="gap-1.5">
+                <Image
+                  src="/openissue-logo.png"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="h-4 w-4"
+                />
+                OSS Issue Finder
+              </Badge>
+              <Badge variant="outline">GitHub Search API</Badge>
             </div>
+            <div className="flex items-center gap-2">
+              <AuthControls />
+              <ThemeToggle />
+            </div>
+          </header>
 
-            <form
+          <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="flex min-w-0 flex-col justify-between gap-8">
+              <div className="space-y-5">
+                <DashboardNavigation current="issues" />
+                <div className="max-w-3xl space-y-4">
+                  <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
+                    Find active open-source issues by tech.
+                  </h1>
+                  <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+                    Search contributor-friendly GitHub issues with labels like
+                    help wanted, good first issue, up-for-grabs, and
+                    documentation.
+                  </p>
+                </div>
+              </div>
+
+              <form
               onSubmit={searchIssues}
               className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-3"
             >
@@ -1976,7 +1978,8 @@ export function IssueFinder() {
             data={data}
           />
         </div>
-      </section>
+      </div>
+    </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
         <IssueFinderSidebar
