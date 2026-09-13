@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FolderGit2,
@@ -38,7 +39,7 @@ import type {
 } from "../types";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring";
+  "h-9 w-full appearance-none rounded-md border border-input bg-background pr-9 pl-3 text-sm focus-visible:outline-2 focus-visible:outline-ring cursor-pointer";
 
 function SearchSession({ query }: Readonly<{ query: string }>) {
   const router = useRouter();
@@ -269,42 +270,48 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
           <label htmlFor="status-select" className="block">
             Status
           </label>
-          <select
-            id="status-select"
-            className={SELECT_CLASS}
-            value={filters.status}
-            onChange={(event) =>
-              updateFilter(
-                "status",
-                event.target.value as OrganizationIssueFilters["status"],
-              )
-            }
-          >
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="all">All statuses</option>
-          </select>
+          <div className="relative">
+            <select
+              id="status-select"
+              className={SELECT_CLASS}
+              value={filters.status}
+              onChange={(event) =>
+                updateFilter(
+                  "status",
+                  event.target.value as OrganizationIssueFilters["status"],
+                )
+              }
+            >
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="all">All statuses</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          </div>
         </div>
 
         <div className="space-y-2 text-sm font-medium lg:col-span-2">
           <label htmlFor="sort-select" className="block">
             Sort by
           </label>
-          <select
-            id="sort-select"
-            className={SELECT_CLASS}
-            value={filters.sort}
-            onChange={(event) =>
-              updateFilter(
-                "sort",
-                event.target.value as OrganizationIssueFilters["sort"],
-              )
-            }
-          >
-            <option value="updated">Recently updated</option>
-            <option value="created">Newest</option>
-            <option value="comments">Most comments</option>
-          </select>
+          <div className="relative">
+            <select
+              id="sort-select"
+              className={SELECT_CLASS}
+              value={filters.sort}
+              onChange={(event) =>
+                updateFilter(
+                  "sort",
+                  event.target.value as OrganizationIssueFilters["sort"],
+                )
+              }
+            >
+              <option value="updated">Recently updated</option>
+              <option value="created">Newest</option>
+              <option value="comments">Most comments</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          </div>
         </div>
 
         <div className="flex items-end lg:col-span-2">
