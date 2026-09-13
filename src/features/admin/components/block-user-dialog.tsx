@@ -98,6 +98,13 @@ export function BlockUserDialog({
     }
   }
 
+  let actionIcon = <CheckCircle2 className="size-4" />;
+  if (isSubmitting) {
+    actionIcon = <Loader2 className="size-4 animate-spin" />;
+  } else if (isBlock) {
+    actionIcon = <Ban className="size-4" />;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -180,13 +187,7 @@ export function BlockUserDialog({
             disabled={isSubmitting}
             className="gap-2"
           >
-            {isSubmitting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : isBlock ? (
-              <Ban className="size-4" />
-            ) : (
-              <CheckCircle2 className="size-4" />
-            )}
+            {actionIcon}
             {isBlock ? "Block User" : "Unblock User"}
           </Button>
         </DialogFooter>

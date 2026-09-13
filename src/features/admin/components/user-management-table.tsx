@@ -81,21 +81,19 @@ export function UserManagementTable({
   useEffect(() => {
     let cancelled = false;
 
-    const filterField =
-      statusFilter === "blocked" || statusFilter === "active"
-        ? "banned"
-        : roleFilter !== "all"
-        ? "role"
-        : undefined;
+    let filterField: string | undefined;
+    let filterValue: string | number | boolean | undefined;
 
-    const filterValue =
-      statusFilter === "blocked"
-        ? true
-        : statusFilter === "active"
-        ? false
-        : roleFilter !== "all"
-        ? roleFilter
-        : undefined;
+    if (statusFilter === "blocked") {
+      filterField = "banned";
+      filterValue = true;
+    } else if (statusFilter === "active") {
+      filterField = "banned";
+      filterValue = false;
+    } else if (roleFilter !== "all") {
+      filterField = "role";
+      filterValue = roleFilter;
+    }
 
     void listAdminUsers({
       searchValue: debouncedSearch,
@@ -179,6 +177,218 @@ export function UserManagementTable({
         type: "error",
       });
     }
+  }
+
+  function renderTableRows() {
+    if (isLoading) {
+      return Array.from({ length: 5 }).map((_, i) => (
+        <tr key={i} className="animate-pulse">
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="size-8 rounded-full" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-3 w-36" />
+              </div>
+            </div>
+          </td>
+          <td className="px-4 py-3">
+            <Skeleton className="h-5 w-16" />
+          </td>
+          <td className="px-4 py-3">
+            <Skeleton className="h-5 w-16" />
+          </td>
+          <td className="hidden px-4 py-3 md:table-cell">
+            <Skeleton className="h-4 w-24" />
+          </td>
+          <td className="px-4 py-3 text-right">
+            <Skeleton className="ml-auto size-8" />
+          </td>
+        </tr>
+      ));
+    }
+
+    if (users.length === 0) {
+      return (
+        <tr>
+          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+            No users found matching current filters.
+          </td>
+        </tr>
+      );
+    }
+
+    return users.map((userItem) => {
+      const isSelf = currentUserId === userItem.id;
+      const isAdmin = userItem.role === "admin";
+      const isBanned = Boolean(userItem.banned);
+
+      return (
+        <tr
+          key={userItem.id}
+          className="hover:bg-muted/30 transition-colors"
+        >
+          {/* User Info */}
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              {userItem.image ? (
+                <Image
+                  src={userItem.image}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="size-8 rounded-full"
+                />
+              ) : (
+                <div className="flex size-8 items-center justify-center rounded-full bg-muted font-medium text-xs text-muted-foreground">
+                  {userItem.name?.slice(0, 2).toUpperCase() || "U"}
+                </div>
+              )}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span>{userItem.name}</span>
+                  {isSelf ? (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-normal">
+                      You
+                    </span>
+                  ) : null}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {userItem.email}
+                </span>
+              </div>
+            </div>
+          </td>
+
+          {/* Role */}
+          <td className="px-4 py-3">
+            {isAdmin ? (
+              <Badge
+                variant="secondary"
+                className="gap-1 border-primary/20 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                <Shield className="size-3" />
+                Admin
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                Contributor
+              </Badge>
+            )}
+          </td>
+
+          {/* Status */}
+          <td className="px-4 py-3">
+            {isBanned ? (
+              <Badge
+                variant="destructive"
+                className="gap-1"
+                title={
+                  userItem.banReason
+                    ? `Reason: ${userItem.banReason}`
+                    : "Account blocked"
+                }
+              >
+                <Ban className="size-3" />
+                Blocked
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+              >
+                <CheckCircle2 className="size-3" />
+                Active
+              </Badge>
+            )}
+          </td>
+
+          {/* Joined Date */}
+          <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
+            {new Date(userItem.createdAt).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </td>
+
+          {/* Actions */}
+          <td className="px-4 py-3 text-right">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Actions for ${userItem.name}`}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                {/* Block / Unblock action */}
+                {isBanned ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setDialogUser(userItem);
+                      setDialogMode("unblock");
+                      setIsDialogOpen(true);
+                    }}
+                    className="gap-2 text-emerald-600 dark:text-emerald-400"
+                  >
+                    <UserCheck className="size-4" />
+                    Unblock user
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setDialogUser(userItem);
+                      setDialogMode("block");
+                      setIsDialogOpen(true);
+                    }}
+                    disabled={isSelf}
+                    className="gap-2 text-destructive focus:text-destructive"
+                  >
+                    <UserX className="size-4" />
+                    Block user
+                  </DropdownMenuItem>
+                )}
+
+                {/* Role toggle */}
+                <DropdownMenuItem
+                  onClick={() => void handleToggleRole(userItem)}
+                  disabled={isSelf}
+                  className="gap-2"
+                >
+                  {isAdmin ? (
+                    <>
+                      <ShieldAlert className="size-4 text-amber-500" />
+                      Demote to Contributor
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="size-4 text-primary" />
+                      Promote to Admin
+                    </>
+                  )}
+                </DropdownMenuItem>
+
+                {/* Revoke sessions */}
+                <DropdownMenuItem
+                  onClick={() => void handleRevokeSessions(userItem)}
+                  className="gap-2 text-muted-foreground"
+                >
+                  <KeyRound className="size-4" />
+                  Revoke all sessions
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </td>
+        </tr>
+      );
+    });
   }
 
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -286,211 +496,7 @@ export function UserManagementTable({
             </tr>
           </thead>
           <tbody className="divide-y">
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="size-8 rounded-full" />
-                      <div className="space-y-1">
-                        <Skeleton className="h-4 w-28" />
-                        <Skeleton className="h-3 w-36" />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Skeleton className="h-5 w-16" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Skeleton className="h-5 w-16" />
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    <Skeleton className="h-4 w-24" />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Skeleton className="ml-auto size-8" />
-                  </td>
-                </tr>
-              ))
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  No users found matching current filters.
-                </td>
-              </tr>
-            ) : (
-              users.map((userItem) => {
-                const isSelf = currentUserId === userItem.id;
-                const isAdmin = userItem.role === "admin";
-                const isBanned = Boolean(userItem.banned);
-
-                return (
-                  <tr
-                    key={userItem.id}
-                    className="hover:bg-muted/30 transition-colors"
-                  >
-                    {/* User Info */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {userItem.image ? (
-                          <Image
-                            src={userItem.image}
-                            alt=""
-                            width={32}
-                            height={32}
-                            className="size-8 rounded-full"
-                          />
-                        ) : (
-                          <div className="flex size-8 items-center justify-center rounded-full bg-muted font-medium text-xs text-muted-foreground">
-                            {userItem.name?.slice(0, 2).toUpperCase() || "U"}
-                          </div>
-                        )}
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5 font-medium">
-                            <span>{userItem.name}</span>
-                            {isSelf ? (
-                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-normal">
-                                You
-                              </span>
-                            ) : null}
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {userItem.email}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Role */}
-                    <td className="px-4 py-3">
-                      {isAdmin ? (
-                        <Badge
-                          variant="secondary"
-                          className="gap-1 border-primary/20 bg-primary/10 text-primary hover:bg-primary/20"
-                        >
-                          <Shield className="size-3" />
-                          Admin
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Contributor
-                        </Badge>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      {isBanned ? (
-                        <Badge
-                          variant="destructive"
-                          className="gap-1"
-                          title={
-                            userItem.banReason
-                              ? `Reason: ${userItem.banReason}`
-                              : "Account blocked"
-                          }
-                        >
-                          <Ban className="size-3" />
-                          Blocked
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                        >
-                          <CheckCircle2 className="size-3" />
-                          Active
-                        </Badge>
-                      )}
-                    </td>
-
-                    {/* Joined Date */}
-                    <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
-                      {new Date(userItem.createdAt).toLocaleDateString(undefined, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Actions for ${userItem.name}`}
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-
-                          {/* Block / Unblock action */}
-                          {isBanned ? (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setDialogUser(userItem);
-                                setDialogMode("unblock");
-                                setIsDialogOpen(true);
-                              }}
-                              className="gap-2 text-emerald-600 dark:text-emerald-400"
-                            >
-                              <UserCheck className="size-4" />
-                              Unblock user
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setDialogUser(userItem);
-                                setDialogMode("block");
-                                setIsDialogOpen(true);
-                              }}
-                              disabled={isSelf}
-                              className="gap-2 text-destructive focus:text-destructive"
-                            >
-                              <UserX className="size-4" />
-                              Block user
-                            </DropdownMenuItem>
-                          )}
-
-                          {/* Role toggle */}
-                          <DropdownMenuItem
-                            onClick={() => void handleToggleRole(userItem)}
-                            disabled={isSelf}
-                            className="gap-2"
-                          >
-                            {isAdmin ? (
-                              <>
-                                <ShieldAlert className="size-4 text-amber-500" />
-                                Demote to Contributor
-                              </>
-                            ) : (
-                              <>
-                                <ShieldCheck className="size-4 text-primary" />
-                                Promote to Admin
-                              </>
-                            )}
-                          </DropdownMenuItem>
-
-                          {/* Revoke sessions */}
-                          <DropdownMenuItem
-                            onClick={() => void handleRevokeSessions(userItem)}
-                            className="gap-2 text-muted-foreground"
-                          >
-                            <KeyRound className="size-4" />
-                            Revoke all sessions
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+            {renderTableRows()}
           </tbody>
         </table>
       </div>

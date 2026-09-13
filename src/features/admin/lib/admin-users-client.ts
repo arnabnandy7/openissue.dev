@@ -38,7 +38,7 @@ export async function listAdminUsers(params: ListUsersParams = {}) {
       sortBy: params.sortBy ?? "createdAt",
       sortDirection: params.sortDirection ?? "desc",
       filterField: params.filterField || undefined,
-      filterValue: params.filterValue !== undefined ? params.filterValue : undefined,
+      filterValue: params.filterValue ?? undefined,
       filterOperator: params.filterOperator || undefined,
     },
   });
