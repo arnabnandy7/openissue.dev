@@ -27,10 +27,13 @@ export type AutocompleteInputProps<T> = {
   maxLength?: number;
   id?: string;
   name?: string;
+  ariaLabel?: string;
+  icon?: ReactNode;
   emptyMessage?: string;
   debounceMs?: number;
   onSelect?: (item: T) => void;
   className?: string;
+  inputClassName?: string;
 };
 
 export function AutocompleteInput<T>({
@@ -46,10 +49,13 @@ export function AutocompleteInput<T>({
   maxLength,
   id,
   name,
+  ariaLabel,
+  icon,
   emptyMessage = "No suggestions found",
   debounceMs = 250,
   onSelect,
   className,
+  inputClassName,
 }: Readonly<AutocompleteInputProps<T>>) {
   const [isOpen, setIsOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<T[]>([]);
@@ -157,8 +163,13 @@ export function AutocompleteInput<T>({
   }
 
   return (
-    <div ref={containerRef} className={cn("relative w-full", className)}>
+    <div ref={containerRef} className={cn("relative w-full min-w-0", className)}>
       <div className="relative flex items-center">
+        {icon ? (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10">
+            {icon}
+          </span>
+        ) : null}
         <Input
           ref={inputRef}
           id={id}
@@ -172,10 +183,11 @@ export function AutocompleteInput<T>({
           disabled={disabled}
           maxLength={maxLength}
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={isOpen}
           aria-autocomplete="list"
           aria-controls={isOpen ? listboxId : undefined}
-          className="pr-16"
+          className={cn("h-11 pr-16", icon ? "pl-9" : "", inputClassName)}
         />
         <div className="absolute right-2 flex items-center gap-1 text-muted-foreground">
           {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}

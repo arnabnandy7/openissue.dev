@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import * as React from "react";
 import {
   act,
   cleanup,
@@ -16,6 +17,46 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/components/auth-controls", () => ({ AuthControls: () => null }));
 vi.mock("@/components/theme-toggle", () => ({ ThemeToggle: () => null }));
+
+vi.mock("@/components/ui/select", () => ({
+  Select: ({ value, onValueChange, children }: any) => {
+    let selectTrigger: any = null;
+    let selectItems: any[] = [];
+    React.Children.forEach(children, (child: any) => {
+      if (!child) return;
+      if (child.type?.name === "SelectTrigger" || child.props?.["aria-label"]) {
+        selectTrigger = child;
+      }
+      if (child.type?.name === "SelectContent" || child.props?.children) {
+        React.Children.forEach(child.props.children, (item: any) => {
+          if (item) selectItems.push(item);
+        });
+      }
+    });
+
+    return (
+      <select
+        id={selectTrigger?.props?.id}
+        aria-label={selectTrigger?.props?.["aria-label"]}
+        value={value}
+        onChange={(e) => onValueChange?.(e.target.value)}
+        className={selectTrigger?.props?.className}
+      >
+        {selectItems.map((item: any, index: number) => (
+          <option key={item.props?.value ?? index} value={item.props?.value}>
+            {item.props?.children}
+          </option>
+        ))}
+      </select>
+    );
+  },
+  SelectTrigger: ({ children }: any) => children,
+  SelectValue: ({ children }: any) => children,
+  SelectContent: ({ children }: any) => children,
+  SelectItem: ({ value, children }: any) => (
+    <option value={value}>{children}</option>
+  ),
+}));
 
 import { OrganizationDashboard } from "@/features/organizations/components/organization-dashboard";
 import type { OrganizationIssue } from "@/features/organizations/types";

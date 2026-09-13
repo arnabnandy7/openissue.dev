@@ -5,14 +5,12 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Building2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  FolderGit2,
+  GitFork,
   Info,
   Search,
   Star,
-  Tag,
 } from "lucide-react";
 import { DashboardNavigation } from "@/components/dashboard-navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -20,6 +18,13 @@ import { AuthControls } from "@/components/auth-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { LoadingResults } from "@/features/issues/components/loading-results";
 import { AutocompleteInput } from "./autocomplete-input";
 import { OrganizationIssueCard } from "./organization-issue-card";
@@ -38,8 +43,23 @@ import type {
   TechnologySuggestion,
 } from "../types";
 
-const SELECT_CLASS =
-  "h-9 w-full appearance-none rounded-md border border-input bg-background pr-9 pl-3 text-sm focus-visible:outline-2 focus-visible:outline-ring cursor-pointer";
+const STATUS_OPTIONS: ReadonlyArray<{
+  value: OrganizationIssueFilters["status"];
+  label: string;
+}> = [
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+  { value: "all", label: "All statuses" },
+];
+
+const SORT_OPTIONS: ReadonlyArray<{
+  value: OrganizationIssueFilters["sort"];
+  label: string;
+}> = [
+  { value: "updated", label: "Recently updated" },
+  { value: "created", label: "Newest" },
+  { value: "comments", label: "Most comments" },
+];
 
 function SearchSession({ query }: Readonly<{ query: string }>) {
   const router = useRouter();
@@ -159,20 +179,22 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
     <>
       <form
         onSubmit={submit}
-        className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-6"
+        className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-3"
       >
-        <div className="space-y-2 text-sm font-medium lg:col-span-2">
-          <label htmlFor="org-input" className="block">
+        <div className="relative min-w-0">
+          <label htmlFor="org-input" className="sr-only">
             Organization
           </label>
           <AutocompleteInput<OrganizationSuggestion>
             id="org-input"
+            ariaLabel="Organization"
+            icon={<Building2 className="size-4" />}
             value={filters.org}
             onChange={(val) => updateFilter("org", val)}
             fetchSuggestions={fetchOrgSuggestions}
             getSuggestionValue={(item) => item.login}
             getSuggestionKey={(item) => item.login}
-            placeholder="e.g. vercel, facebook, microsoft"
+            placeholder="Organization (e.g. vercel)"
             required
             maxLength={39}
             emptyMessage="No organizations found"
@@ -202,18 +224,20 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
           />
         </div>
 
-        <div className="space-y-2 text-sm font-medium lg:col-span-2">
-          <label htmlFor="tech-input" className="block">
+        <div className="relative min-w-0">
+          <label htmlFor="tech-input" className="sr-only">
             Technology
           </label>
           <AutocompleteInput<TechnologySuggestion>
             id="tech-input"
+            ariaLabel="Technology"
+            icon={<Search className="size-4" />}
             value={filters.tech}
             onChange={(val) => updateFilter("tech", val)}
             fetchSuggestions={fetchTechSuggestions}
             getSuggestionValue={(item) => item.name}
             getSuggestionKey={(item) => item.name}
-            placeholder="e.g. TypeScript, React, Spring Boot"
+            placeholder="Technology (e.g. TypeScript)"
             required
             maxLength={80}
             emptyMessage="No technologies found"
@@ -228,12 +252,14 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
           />
         </div>
 
-        <div className="space-y-2 text-sm font-medium lg:col-span-2">
-          <label htmlFor="repo-input" className="block">
-            Repository <span className="font-normal text-muted-foreground">(optional)</span>
+        <div className="relative min-w-0">
+          <label htmlFor="repo-input" className="sr-only">
+            Repository (optional)
           </label>
           <AutocompleteInput<OrgRepositorySuggestion>
             id="repo-input"
+            ariaLabel="Repository (optional)"
+            icon={<GitFork className="size-4" />}
             value={filters.repository}
             onChange={(val) => updateFilter("repository", val)}
             fetchSuggestions={fetchRepoSuggestions}
@@ -242,7 +268,7 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
             disabled={!filters.org.trim()}
             placeholder={
               filters.org.trim()
-                ? `e.g. ${filters.org.toLowerCase() === "vercel" ? "next.js" : "repo-name"}`
+                ? `Repository in ${filters.org} (optional)`
                 : "Select an organization first"
             }
             maxLength={140}
@@ -266,64 +292,75 @@ function SearchSession({ query }: Readonly<{ query: string }>) {
           />
         </div>
 
-        <div className="space-y-2 text-sm font-medium lg:col-span-2">
-          <label htmlFor="status-select" className="block">
+        <div className="relative min-w-0">
+          <label htmlFor="status-select" className="sr-only">
             Status
           </label>
-          <div className="relative">
-            <select
+          <Select
+            value={filters.status}
+            onValueChange={(val) =>
+              updateFilter("status", val as OrganizationIssueFilters["status"])
+            }
+          >
+            <SelectTrigger
               id="status-select"
-              className={SELECT_CLASS}
-              value={filters.status}
-              onChange={(event) =>
-                updateFilter(
-                  "status",
-                  event.target.value as OrganizationIssueFilters["status"],
-                )
-              }
+              className="h-11 w-full"
+              size="lg"
+              aria-label="Status"
             >
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
-              <option value="all">All statuses</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          </div>
+              <SelectValue>
+                {STATUS_OPTIONS.find((o) => o.value === filters.status)?.label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="space-y-2 text-sm font-medium lg:col-span-2">
-          <label htmlFor="sort-select" className="block">
+        <div className="relative min-w-0">
+          <label htmlFor="sort-select" className="sr-only">
             Sort by
           </label>
-          <div className="relative">
-            <select
+          <Select
+            value={filters.sort}
+            onValueChange={(val) =>
+              updateFilter("sort", val as OrganizationIssueFilters["sort"])
+            }
+          >
+            <SelectTrigger
               id="sort-select"
-              className={SELECT_CLASS}
-              value={filters.sort}
-              onChange={(event) =>
-                updateFilter(
-                  "sort",
-                  event.target.value as OrganizationIssueFilters["sort"],
-                )
-              }
+              className="h-11 w-full"
+              size="lg"
+              aria-label="Sort by"
             >
-              <option value="updated">Recently updated</option>
-              <option value="created">Newest</option>
-              <option value="comments">Most comments</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          </div>
+              <SelectValue>
+                {SORT_OPTIONS.find((o) => o.value === filters.sort)?.label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex items-end lg:col-span-2">
-          <Button
-            className="w-full"
-            type="submit"
-            disabled={loading || cooldown !== null}
-          >
-            <Search className="size-4 mr-1.5" />
-            {loading ? "Searching…" : "Search issues"}
-          </Button>
-        </div>
+        <Button
+          className="h-11 w-full gap-2 sm:col-span-2 lg:col-span-1"
+          type="submit"
+          aria-label="Search issues"
+          disabled={loading || cooldown !== null}
+        >
+          <Search className="size-4" />
+          {loading ? "Searching…" : cooldown !== null ? "Cooldown…" : "Search"}
+        </Button>
       </form>
 
       <p className="text-sm text-muted-foreground">

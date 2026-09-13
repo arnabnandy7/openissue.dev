@@ -103,4 +103,26 @@ describe("AutocompleteInput", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("renders with custom icon, ariaLabel, and inputClassName", () => {
+    render(
+      <AutocompleteInput<string>
+        value=""
+        onChange={vi.fn()}
+        fetchSuggestions={() => []}
+        getSuggestionValue={(s) => s}
+        getSuggestionKey={(s) => s}
+        renderSuggestion={(s) => <span>{s}</span>}
+        icon={<span data-testid="custom-icon">Icon</span>}
+        ariaLabel="Custom field"
+        inputClassName="custom-input-class"
+      />,
+    );
+
+    expect(screen.getByTestId("custom-icon")).toBeTruthy();
+    const input = screen.getByRole("combobox");
+    expect(input.getAttribute("aria-label")).toBe("Custom field");
+    expect(input.className).toContain("custom-input-class");
+    expect(input.className).toContain("pl-9");
+  });
 });
