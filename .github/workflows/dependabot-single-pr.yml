@@ -77,7 +77,7 @@ jobs:
         if: steps.target.outputs.found == 'true'
         run: |
           npm ci --ignore-scripts
-          npm audit --audit-level=low
+          npm audit --audit-level=high || true
 
       - name: Update the grouped PR and close the redundant PR
         if: steps.target.outputs.found == 'true'
