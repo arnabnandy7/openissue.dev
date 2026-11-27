@@ -64,7 +64,7 @@ flowchart LR
 
 See [Architecture and data flow](doc/architecture.md) for the expanded request flows, persistence model, and component relationships.
 
-## Documentation
+## Documentations
 
 - [Setup and deployment](doc/setup.md)
 - [Architecture and data flow](doc/architecture.md)
